@@ -1,6 +1,6 @@
-// sqwrtr – fase 2: klepbesturing + veiligheid
+// sqwrtr – fase 3: REST-API + auth + /update
 // Veilige pin-init, WiFi + fallback-AP, mDNS, ArduinoOTA, zone-manager met
-// veiligheidsregels, FLASH-knop, status-LED en serieel testconsole.
+// veiligheidsregels, FLASH-knop, status-LED, serieel testconsole en webserver.
 
 #include <Arduino.h>
 #include "config.h"
@@ -9,6 +9,7 @@
 #include "relays.h"
 #include "zones.h"
 #include "net.h"
+#include "web.h"
 #include "button.h"
 #include "console.h"
 #include "status_led.h"
@@ -50,13 +51,15 @@ void setup() {
 
     zones::begin();
     net::begin({
-        []() { return zones::activeCount() == 0; },                        // geen OTA met open kleppen
+        []() { return zones::activeCount() == 0 && !web::updateInProgress(); },  // geen OTA met open kleppen
         []() { zones::closeAll(zones::Source::System, "ota"); relays::allOff(); },
     });
+    web::begin();
 }
 
 void loop() {
     net::loop();
+    web::loop();
     zones::loop();
     button::loop();
     console::loop();

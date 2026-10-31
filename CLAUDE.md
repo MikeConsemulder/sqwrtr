@@ -131,6 +131,8 @@ Basis `/api`, JSON. Auth: header `X-API-Key: <key>` (of `Authorization: Bearer <
 
 | Methode | Pad | Doel |
 |---|---|---|
+| POST | `/api/login` | body `{ "password": "..." }` → sessiecookie (enige endpoint zonder auth) |
+| POST | `/api/logout` | Sessie beëindigen |
 | GET | `/api/status` | Totale status: zones, actieve runs, resterende tijd, wachtrij, modus, regenpauze, factor |
 | GET | `/api/info` | Firmwareversie, uptime, vrij heap, RSSI, IP, reset-reden |
 | GET / PUT | `/api/zones`, `/api/zones/{id}` | Zones lezen/instellen |
