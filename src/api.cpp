@@ -65,6 +65,9 @@ static void zoneJson(JsonObject o, uint8_t z, bool full) {
     o["name"] = c.name;
     o["state"] = stateName(zones::state(z));
     o["remaining_s"] = zones::remainingS(z);
+    o["pin"] = ZONE_PIN_LABELS[z];
+    o["gpio"] = ZONE_PINS[z];
+    o["relay"] = z + 1;  // relaisingang IN<n>
     if (!full) return;
     o["type"] = typeName(c.type);
     o["enabled"] = c.enabled;

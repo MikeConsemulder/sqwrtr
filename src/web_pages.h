@@ -19,6 +19,9 @@ button{cursor:pointer}button.p{background:var(--acc);border-color:var(--acc);col
 .badge{font-size:.8em;padding:2px 8px;border-radius:99px;background:var(--line)}.badge.open{background:var(--acc);color:#fff}
 #msg{position:fixed;left:16px;right:16px;bottom:16px;max-width:608px;margin:auto;padding:12px;border-radius:8px;background:var(--fg);color:var(--bg);display:none}
 a{color:var(--acc)}input[type=number]{width:5.5em}
+.pin{margin:6px 0 0}.pin b{font-family:ui-monospace,monospace;background:var(--line);padding:1px 6px;border-radius:4px}
+table{border-collapse:collapse;width:100%;margin:10px 0}td,th{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+td:first-child{font-family:ui-monospace,monospace;font-weight:700}summary{cursor:pointer}
 </style>)css";
 
 // Gedeeld: inloggen, API-aanroep, melding.
@@ -49,6 +52,15 @@ static const char INDEX_BODY[] PROGMEM = R"html(
 <div id=app style=display:none>
 <div class=card><button class=stop onclick="api('/stop','POST').then(load)">NOODSTOP</button></div>
 <div id=zones></div>
+<details class=card><summary><b>Aansluitingen relaisbord</b></summary>
+<table><tr><th>ESP-bord</th><th>Relaisbord</th></tr>
+<tr><td>D1</td><td>IN1 (zone 1)</td></tr><tr><td>D2</td><td>IN2 (zone 2)</td></tr>
+<tr><td>D5</td><td>IN3 (zone 3)</td></tr><tr><td>D6</td><td>IN4 (zone 4)</td></tr>
+<tr><td>D7</td><td>IN5 (zone 5)</td></tr><tr><td>3V3</td><td>VCC</td></tr>
+<tr><td>5 V buck (bureau: VIN)</td><td>JD-VCC <small>(jumper eraf)</small></td></tr>
+<tr><td>GND</td><td>GND</td></tr></table>
+<p class=mute>Niet gebruiken: <b>D8</b> (boot faalt), <b>D3</b> = FLASH-knop, <b>D4</b> = LED.
+Gereserveerd: D0 hoofdklep/pomp (IN6), RX flowmeter, A0 regensensor.</p></details>
 <p class=mute>Testpagina (fase 3) · <a href=/update>Firmware-update</a> · <a href=# onclick=logout()>Uitloggen</a></p>
 </div></main>)html";
 static const char INDEX_JS[] PROGMEM = R"js(<script>
@@ -58,6 +70,7 @@ function render(st){
   const el=$('#zones');
   if(el.children.length!=st.zones.length){el.innerHTML=st.zones.map(z=>`<div class=card id=z${z.id}>
 <div class=row><b class=grow>${z.id}. <span class=n></span></b><span class=badge></span></div>
+<p class=pin>Pin <b>${z.pin}</b> <small>(GPIO${z.gpio})</small> → relais <b>IN${z.relay}</b></p>
 <p class="mute r">&nbsp;</p>
 <div class=row><input type=number min=1 value=1 id=m${z.id}> min
 <button class=p onclick="openZ(${z.id},true)">Open</button><button onclick="openZ(${z.id},false)">Open ∞</button>

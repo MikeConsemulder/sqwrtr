@@ -11,6 +11,9 @@ static const uint8_t ZONE_PINS[] = {
     13,  // D7 – zone 5 → IN5
 };
 static const uint8_t ZONE_COUNT = sizeof(ZONE_PINS) / sizeof(ZONE_PINS[0]);
+// Opdruk op het ESP-bord, voor de web-UI (zone n → relaisingang IN<n>).
+static const char* const ZONE_PIN_LABELS[] = {"D1", "D2", "D5", "D6", "D7"};
+static_assert(sizeof(ZONE_PIN_LABELS) / sizeof(ZONE_PIN_LABELS[0]) == ZONE_COUNT, "pinlabel per zone");
 
 static const uint8_t PIN_MASTER_VALVE = 16;  // D0 – hoofdklep/pomp → IN6 (later)
 static const uint8_t PIN_BUTTON       = 0;   // D3 – onboard FLASH-knop (active LOW)
