@@ -23,3 +23,19 @@ static const char HOSTNAME[]         = "sqwrtr";
 static const char AP_SSID[]          = "sqwrtr-setup";
 static const uint32_t WIFI_AP_FALLBACK_MS = 5UL * 60 * 1000;  // 5 min zonder WiFi → AP
 static const uint32_t WIFI_AP_LINGER_MS   = 60UL * 1000;      // AP nog 1 min aan na herverbinden
+static const uint32_t WIFI_AP_MANUAL_MS   = 15UL * 60 * 1000; // AP via knop: min. 15 min aan
+
+// ---- Veiligheid (standaardwaarden, later instelbaar via UI/API) ----
+static const uint8_t  DEFAULT_MAX_CONCURRENT = 2;
+static const uint16_t DEFAULT_STAGGER_MS     = 500;       // vertraging tussen inschakelen kleppen
+static const uint32_t DEFAULT_MAX_RUNTIME_S  = 120 * 60;  // max looptijd per klep
+static const uint32_t DEFAULT_DURATION_S     = 10 * 60;   // standaardduur per zone
+
+// ---- FLASH-knop ----
+static const uint32_t BUTTON_DEBOUNCE_MS = 50;
+static const uint32_t BUTTON_ESTOP_MS    = 2000;   // lang indrukken → noodstop
+static const uint32_t BUTTON_AP_MS       = 10000;  // heel lang → AP-modus
+
+// ---- RTC-geheugen ----
+// Blok 0–31 gebruikt de bootloader (eboot) voor OTA; wij zitten ruim daarna.
+static const uint32_t RTC_OFFSET_RELAYS = 64;

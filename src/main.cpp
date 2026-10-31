@@ -1,11 +1,16 @@
-// sqwrtr – fase 1: fundament
-// Veilige pin-init, WiFi + fallback-AP, mDNS, ArduinoOTA, serieel loggen, status-LED.
+// sqwrtr – fase 2: klepbesturing + veiligheid
+// Veilige pin-init, WiFi + fallback-AP, mDNS, ArduinoOTA, zone-manager met
+// veiligheidsregels, FLASH-knop, status-LED en serieel testconsole.
 
 #include <Arduino.h>
 #include "config.h"
 #include "log.h"
+#include "events.h"
 #include "relays.h"
+#include "zones.h"
 #include "net.h"
+#include "button.h"
+#include "console.h"
 #include "status_led.h"
 
 // Zo vroeg mogelijk in de boot (vóór setup) de relais veilig uit zetten.
@@ -13,32 +18,53 @@ extern "C" void preinit() {
     relays::safeInit();
 }
 
+static void emitBootEvent() {
+    uint8_t prev = relays::previousMask();
+    char list[24] = "";
+    size_t n = 0;
+    for (uint8_t i = 0; i < ZONE_COUNT; i++) {
+        if (prev & (1 << i)) n += snprintf(list + n, sizeof(list) - n, "%s%u", n ? "," : "", i + 1);
+    }
+    events::emit("boot", "{\"versie\":\"%s\",\"reset_reden\":\"%s\",\"kleppen_open_bij_reboot\":[%s]}",
+                 FW_VERSION, ESP.getResetReason().c_str(), list);
+    if (prev) LOG("LET OP: kleppen %s stonden open bij reboot – nu dicht", list);
+}
+
 void setup() {
     relays::safeInit();  // nogmaals, voor de zekerheid
+    relays::begin();
     status_led::begin();
+    button::begin();
 
+#if CONSOLE_ENABLED
+    Serial.begin(115200);
+#else
     Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);  // RX vrij voor flowmeter
+#endif
     Serial.println();
-    LOG("sqwrtr v%s – boot, reset-reden: %s", FW_VERSION, ESP.getResetReason().c_str());
-    LOG("Chip-id %06x, vrij heap %u", ESP.getChipId(), ESP.getFreeHeap());
-    // TODO fase 2: event boot (+ "kleppen waren open bij reboot" via RTC-geheugen)
+    LOG("sqwrtr v%s – chip-id %06x, vrij heap %u", FW_VERSION, ESP.getChipId(), ESP.getFreeHeap());
+    emitBootEvent();
 
     // Software-watchdog expliciet aan; hardware-watchdog staat altijd aan.
     ESP.wdtEnable(WDTO_8S);
 
-    net::begin([]() {
-        relays::allOff();  // nooit updaten met open kleppen
-        // TODO fase 2: OTA weigeren als er een klep open is + event update_started
+    zones::begin();
+    net::begin({
+        []() { return zones::activeCount() == 0; },                        // geen OTA met open kleppen
+        []() { zones::closeAll(zones::Source::System, "ota"); relays::allOff(); },
     });
 }
 
 void loop() {
     net::loop();
+    zones::loop();
+    button::loop();
+    console::loop();
 
     using status_led::Pattern;
-    if (net::apActive())            status_led::set(Pattern::FastBlink);
+    if (zones::anyOpen())           status_led::set(Pattern::On);
+    else if (net::apActive())       status_led::set(Pattern::FastBlink);
     else if (!net::wifiConnected()) status_led::set(Pattern::SlowBlink);
     else                            status_led::set(Pattern::Off);
-    // TODO fase 2: Pattern::On als er een klep open is
     status_led::loop();
 }
