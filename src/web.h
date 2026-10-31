@@ -13,4 +13,11 @@ bool updateInProgress();
 // Herstart na korte vertraging, zodat het HTTP-antwoord nog verstuurd wordt.
 void scheduleRestart();
 
+// WebSocket /ws: event doorsturen naar verbonden clients (detail = JSON-object).
+// Elk event markeert ook de status als gewijzigd → status-push volgt.
+void pushEvent(const char* type, const char* detailJson);
+
+// Status opnieuw pushen zonder event (bijv. na wijzigen van een zonenaam).
+void markStatusDirty();
+
 }  // namespace web

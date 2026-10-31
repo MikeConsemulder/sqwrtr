@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // Pagina's in PROGMEM. Bewust klein en zonder frameworks (RAM is krap).
-// De volwaardige web-UI komt in fase 4; dit is de testpagina + herstelpad.
+// Alleen het herstelpad /update; de web-UI zelf staat in web/index.html (gzip, zie tools/build_web.py).
 
 static const char SQ_STYLE[] PROGMEM = R"css(
 <meta name=viewport content="width=device-width,initial-scale=1">
@@ -46,46 +46,6 @@ static const char SQ_LOGIN[] PROGMEM = R"html(
 <p><b>Inloggen</b></p><div class=row><input id=pw class=grow type=password placeholder="Admin-wachtwoord" autocomplete=current-password required><button class=p>Inloggen</button></div></form>
 <div id=msg></div>)html";
 
-static const char INDEX_TOP[] PROGMEM = "<!doctype html><html lang=nl><head><meta charset=utf-8><title>sqwrtr</title>";
-static const char INDEX_MID[] PROGMEM = "</head><body><main><h1>sqwrtr</h1><small id=info>&nbsp;</small>";
-static const char INDEX_BODY[] PROGMEM = R"html(
-<div id=app style=display:none>
-<div class=card><button class=stop onclick="api('/stop','POST').then(load)">NOODSTOP</button></div>
-<div id=zones></div>
-<details class=card><summary><b>Aansluitingen relaisbord</b></summary>
-<table><tr><th>ESP-bord</th><th>Relaisbord</th></tr>
-<tr><td>D1</td><td>IN1 (zone 1)</td></tr><tr><td>D2</td><td>IN2 (zone 2)</td></tr>
-<tr><td>D5</td><td>IN3 (zone 3)</td></tr><tr><td>D6</td><td>IN4 (zone 4)</td></tr>
-<tr><td>D7</td><td>IN5 (zone 5)</td></tr><tr><td>3V3</td><td>VCC</td></tr>
-<tr><td>5 V buck (bureau: VIN)</td><td>JD-VCC <small>(jumper eraf)</small></td></tr>
-<tr><td>GND</td><td>GND</td></tr></table>
-<p class=mute>Niet gebruiken: <b>D8</b> (boot faalt), <b>D3</b> = FLASH-knop, <b>D4</b> = LED.
-Gereserveerd: D0 hoofdklep/pomp (IN6), RX flowmeter, A0 regensensor.</p></details>
-<p class=mute>Testpagina (fase 3) · <a href=/update>Firmware-update</a> · <a href=# onclick=logout()>Uitloggen</a></p>
-</div></main>)html";
-static const char INDEX_JS[] PROGMEM = R"js(<script>
-let zones=[];
-function fmt(s){return s>=60?Math.floor(s/60)+' min '+(s%60)+' s':s+' s'}
-function render(st){
-  const el=$('#zones');
-  if(el.children.length!=st.zones.length){el.innerHTML=st.zones.map(z=>`<div class=card id=z${z.id}>
-<div class=row><b class=grow>${z.id}. <span class=n></span></b><span class=badge></span></div>
-<p class=pin>Pin <b>${z.pin}</b> <small>(GPIO${z.gpio})</small> → relais <b>IN${z.relay}</b></p>
-<p class="mute r">&nbsp;</p>
-<div class=row><input type=number min=1 value=1 id=m${z.id}> min
-<button class=p onclick="openZ(${z.id},true)">Open</button><button onclick="openZ(${z.id},false)">Open ∞</button>
-<button onclick="api('/zones/${z.id}/close','POST').then(load)">Sluit</button></div></div>`).join('')}
-  for(const z of st.zones){const c=$('#z'+z.id);c.querySelector('.n').textContent=z.name;
-    const b=c.querySelector('.badge');b.textContent={open:'open',pending:'wacht',closed:'dicht'}[z.state];b.className='badge '+z.state;
-    c.querySelector('.r').textContent=z.state=='closed'?' ':'Nog '+fmt(z.remaining_s)}}
-async function openZ(id,timed){const body=timed?{duration_s:Math.round($('#m'+id).value*60)}:{};
-  await api('/zones/'+id+'/open','POST',body).catch(()=>{});load()}
-async function load(){try{render(await api('/status'))}catch(_){}}
-async function start(){try{const i=await api('/info');$('#info').textContent='v'+i.version+' · '+i.ip+' · RSSI '+i.rssi+' dBm'}catch(_){return}
-  $('#app').style.display='block';load();clearInterval(start.t);start.t=setInterval(load,2000)}
-start();
-</script></body></html>)js";
-
 static const char UPDATE_TOP[] PROGMEM = "<!doctype html><html lang=nl><head><meta charset=utf-8><title>sqwrtr update</title>";
 static const char UPDATE_MID[] PROGMEM = "</head><body><main><h1>Firmware-update</h1><small id=info>&nbsp;</small>";
 static const char UPDATE_BODY[] PROGMEM = R"html(
@@ -110,5 +70,4 @@ start();
 </script></body></html>)js";
 
 // Een pagina = reeks PROGMEM-blokken, achter elkaar verstuurd (gedeelde blokken staan maar één keer in flash).
-static const char* const INDEX_PAGE[] = {INDEX_TOP, SQ_STYLE, INDEX_MID, SQ_LOGIN, INDEX_BODY, SQ_SCRIPT, INDEX_JS};
 static const char* const UPDATE_PAGE[] = {UPDATE_TOP, SQ_STYLE, UPDATE_MID, SQ_LOGIN, UPDATE_BODY, SQ_SCRIPT, UPDATE_JS};

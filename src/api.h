@@ -1,4 +1,5 @@
 #pragma once
+#include <ArduinoJson.h>
 
 class AsyncWebServerRequest;
 
@@ -7,5 +8,8 @@ class AsyncWebServerRequest;
 namespace api {
 
 void handle(AsyncWebServerRequest* req);
+
+// Inhoud van GET /api/status; ook gebruikt voor de WebSocket-push.
+void buildStatus(JsonDocument& doc);
 
 }  // namespace api

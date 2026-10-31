@@ -1,6 +1,7 @@
 #include "auth.h"
 #include <ESPAsyncWebServer.h>
-#include "secrets.h"
+#include <libb64/cdecode.h>
+#include "storage.h"
 
 namespace auth {
 
@@ -52,12 +53,12 @@ static bool cookieToken(AsyncWebServerRequest* req, char* out, size_t outLen) {
 }
 
 Who check(AsyncWebServerRequest* req) {
-    if (req->hasHeader("X-API-Key") && safeEquals(req->header("X-API-Key").c_str(), API_KEY)) {
+    if (req->hasHeader("X-API-Key") && storage::checkApiKey(req->header("X-API-Key").c_str())) {
         return Who::ApiKey;
     }
     if (req->hasHeader("Authorization")) {
         const String& h = req->header("Authorization");
-        if (h.startsWith("Bearer ") && safeEquals(h.c_str() + 7, API_KEY)) return Who::ApiKey;
+        if (h.startsWith("Bearer ") && storage::checkApiKey(h.c_str() + 7)) return Who::ApiKey;
     }
     char token[TOKEN_LEN + 2];
     if (cookieToken(req, token, sizeof(token))) {
@@ -70,8 +71,24 @@ Who check(AsyncWebServerRequest* req) {
     return Who::None;
 }
 
-bool passwordOk(const char* password) {
-    return password && safeEquals(password, ADMIN_PASSWORD);
+bool passwordOk(const char* password) { return storage::checkPassword(password); }
+
+bool basicOk(AsyncWebServerRequest* req) {
+    if (!req->hasHeader("Authorization")) return false;
+    const String& h = req->header("Authorization");
+    if (!h.startsWith("Basic ") || h.length() > 200) return false;
+    char decoded[160];
+    int n = base64_decode_chars(h.c_str() + 6, h.length() - 6, decoded);
+    if (n <= 0 || n >= (int)sizeof(decoded)) return false;
+    decoded[n] = '\0';
+    char* colon = strchr(decoded, ':');
+    if (!colon) return false;
+    *colon = '\0';
+    return !strcmp(decoded, "admin") && storage::checkPassword(colon + 1);
+}
+
+void endAllSessions() {
+    for (Session& s : sessions) s.token[0] = '\0';
 }
 
 String createSession() {

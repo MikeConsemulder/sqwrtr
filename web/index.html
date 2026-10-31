@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f7a52">
+<title>sqwrtr</title>
+<style>
+:root{--bg:#f3f5f4;--card:#fff;--fg:#1b2320;--mute:#65706a;--line:#dfe5e2;--acc:#1f7a52;--acc2:#e3f2ea;--red:#c0362c;--warn:#a86400;--warnbg:#fff4e0}
+@media(prefers-color-scheme:dark){:root{--bg:#111513;--card:#1a201e;--fg:#e5ebe8;--mute:#93a099;--line:#2a322f;--acc:#3fb47c;--acc2:#183528;--red:#e5544a;--warn:#f0b04a;--warnbg:#33270f}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{max-width:720px;margin:auto;padding:12px 16px 0;display:flex;align-items:center;gap:10px}
+.bar h1{font-size:1.25em;margin:0;flex:1}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mute);display:inline-block}.dot.on{background:var(--acc)}
+nav{max-width:720px;margin:auto;padding:0 8px;display:flex;overflow-x:auto;scrollbar-width:none}
+nav a{padding:10px 10px 12px;color:var(--mute);text-decoration:none;white-space:nowrap;border-bottom:3px solid transparent;font-weight:500}
+nav a.on{color:var(--fg);border-color:var(--acc)}
+main{max-width:720px;margin:auto;padding:8px 16px 96px}
+h2{font-size:1.05em;margin:20px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grow{flex:1}
+.mute,small{color:var(--mute)}
+button,input,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+button{cursor:pointer;min-height:40px}button:disabled{opacity:.45;cursor:default}
+button.p{background:var(--acc);border-color:var(--acc);color:#fff}
+button.d{color:var(--red);border-color:var(--red)}
+.stop{width:100%;background:var(--red);border:0;color:#fff;font-size:1.25em;font-weight:700;padding:16px;border-radius:12px;letter-spacing:.04em}
+input[type=number]{width:5.5em}input.w{width:100%}
+label{display:block;margin:10px 0 4px;font-weight:500}
+.badge{font-size:.8em;padding:2px 10px;border-radius:99px;background:var(--line);white-space:nowrap}
+.badge.open{background:var(--acc);color:#fff}.badge.pending{background:var(--acc2);color:var(--acc)}
+.zone.open{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc) inset}
+.zone h3{margin:0;font-size:1.05em;flex:1}
+.big{font-size:1.6em;font-weight:600;font-variant-numeric:tabular-nums;margin:6px 0}
+.pin b{font-family:ui-monospace,monospace;background:var(--line);padding:1px 6px;border-radius:4px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-size:1.15em}.stat small{font-size:.8em}
+.warn{background:var(--warnbg);color:var(--warn);border-color:transparent}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+td.k{color:var(--mute);width:40%}td.m{font-family:ui-monospace,monospace;font-weight:600}
+code.key{display:block;word-break:break-all;font-size:1.05em;padding:10px;background:var(--bg);border-radius:8px;margin:8px 0}
+.log li{padding:8px 0;border-bottom:1px solid var(--line);list-style:none}.log{padding:0;margin:0}
+.log time{color:var(--mute);font-variant-numeric:tabular-nums;margin-right:8px}
+#toast{position:fixed;left:16px;right:16px;bottom:16px;max-width:688px;margin:auto;padding:12px 14px;border-radius:10px;background:var(--fg);color:var(--bg);display:none;z-index:9}
+.hide{display:none!important}
+@media(max-width:420px){
+  .stat{padding:8px 10px}.stat b{font-size:1em}
+  .zone .row button{padding:8px 10px}.zone input[type=number]{width:4em}.zone .row{gap:6px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><h1>sqwrtr</h1><span id="conn" class="mute"><span class="dot"></span> <small>offline</small></span></div>
+  <nav id="nav" class="hide">
+    <a href="#/">Dashboard</a><a href="#/programmas">Programma's</a><a href="#/zones">Zones</a>
+    <a href="#/logboek">Logboek</a><a href="#/instellingen">Instellingen</a><a href="#/systeem">Systeem</a>
+  </nav>
+</header>
+<main>
+
+<form id="login" class="card hide" onsubmit="doLogin(event)">
+  <h2 style="margin-top:0">Inloggen</h2>
+  <div class="row"><input id="pw" class="grow" type="password" placeholder="Admin-wachtwoord" autocomplete="current-password" required><button class="p">Inloggen</button></div>
+</form>
+
+<section id="p-dashboard" class="page hide">
+  <div class="card"><button class="stop" onclick="estop()">NOODSTOP</button></div>
+  <div class="stats">
+    <div class="stat"><small>Open</small><b id="s-open">–</b></div>
+    <div class="stat"><small>Modus</small><b id="s-mode">–</b></div>
+    <div class="stat"><small>Factor</small><b id="s-factor">–</b></div>
+  </div>
+  <div id="zones"></div>
+  <p class="mute"><small>Programma's, wachtrij en regenpauze komen in fase 5.</small></p>
+</section>
+
+<section id="p-programmas" class="page hide">
+  <div class="card"><h2 style="margin-top:0">Programma's</h2>
+  <p class="mute">Komt in fase 5: schema's met starttijden en weekdagen, wachtrij, seizoensfactor en regenpauze.</p></div>
+</section>
+
+<section id="p-zones" class="page hide"><div id="zone-forms"></div></section>
+
+<section id="p-logboek" class="page hide">
+  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Live events</h2><button onclick="logItems=[];renderLog()">Wissen</button></div>
+  <p class="mute"><small>Alles wat er gebeurt sinds je deze pagina opende. Het opgeslagen logboek komt in fase 5.</small></p>
+  <ul id="log" class="log"></ul></div>
+</section>
+
+<section id="p-instellingen" class="page hide">
+  <div id="pw-warn" class="card warn hide">Je gebruikt nog het standaardwachtwoord uit <code>secrets.h</code>. Wijzig het hieronder.</div>
+  <form class="card" onsubmit="saveSafety(event)">
+    <h2 style="margin-top:0">Veiligheid</h2>
+    <label for="mc">Max kleppen tegelijk open</label>
+    <input id="mc" type="number" min="1" max="5" required>
+    <small id="mc-warn" class="hide" style="display:block;color:var(--warn)">Let op: de 30 W-adapter is berekend op max 2 kleppen.</small>
+    <label for="sg">Vertraging tussen inschakelen (ms)</label>
+    <input id="sg" type="number" min="0" max="10000" step="100" required>
+    <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div>
+  </form>
+  <form class="card" onsubmit="changePw(event)">
+    <h2 style="margin-top:0">Wachtwoord wijzigen</h2>
+    <label for="pw0">Huidig wachtwoord</label><input id="pw0" class="w" type="password" autocomplete="current-password" required>
+    <label for="pw1">Nieuw wachtwoord <small>(min. 8 tekens)</small></label><input id="pw1" class="w" type="password" minlength="8" maxlength="64" autocomplete="new-password" required>
+    <label for="pw2">Herhaal nieuw wachtwoord</label><input id="pw2" class="w" type="password" autocomplete="new-password" required>
+    <div class="row" style="margin-top:12px"><button class="p">Wijzigen</button></div>
+  </form>
+  <div class="card">
+    <h2 style="margin-top:0">API-key</h2>
+    <p class="mute" id="key-state">Voor Home Assistant en scripts: header <code>X-API-Key</code>.</p>
+    <div id="key-new" class="hide"><code id="key-val" class="key"></code>
+      <div class="row"><button onclick="copyKey()">Kopiëren</button><small class="mute">Wordt maar één keer getoond.</small></div></div>
+    <div class="row" style="margin-top:12px"><button onclick="newKey()">Nieuwe API-key genereren</button></div>
+  </div>
+  <div class="card"><h2 style="margin-top:0">MQTT en tijd</h2><p class="mute">Tijd/NTP komt in fase 5, MQTT en Home Assistant in fase 6.</p></div>
+</section>
+
+<section id="p-systeem" class="page hide">
+  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Systeem</h2><button onclick="loadInfo()">Vernieuwen</button></div>
+    <table id="info" style="margin-top:8px"></table></div>
+  <div class="card"><h2 style="margin-top:0">Firmware</h2>
+    <p class="mute">Nieuwe firmware of bestandssysteem uploaden. Alleen als alle kleppen dicht zijn.</p>
+    <a href="/update"><button class="p">Naar update-pagina</button></a></div>
+  <div class="card"><h2 style="margin-top:0">Backup</h2>
+    <p class="mute">Zones en instellingen als JSON (zonder wachtwoord en API-key).</p>
+    <div class="row"><a href="/api/backup" download="sqwrtr-config.json"><button>Backup downloaden</button></a>
+    <label class="row" style="margin:0"><button type="button" onclick="$('#restore').click()">Backup terugzetten…</button></label>
+    <input id="restore" type="file" accept=".json,application/json" class="hide" onchange="restore(this)"></div></div>
+  <div class="card"><h2 style="margin-top:0">Herstarten</h2>
+    <p class="mute">Alle kleppen gaan dicht. Na een herstart moet je opnieuw inloggen.</p>
+    <button class="d" onclick="reboot()">Herstarten</button>
+    <button onclick="logout()">Uitloggen</button></div>
+  <div class="card"><h2 style="margin-top:0">Aansluitingen relaisbord</h2>
+    <table><tr><th>ESP-bord</th><th>Relaisbord</th></tr>
+    <tr><td class="m">D1</td><td>IN1 (zone 1)</td></tr><tr><td class="m">D2</td><td>IN2 (zone 2)</td></tr>
+    <tr><td class="m">D5</td><td>IN3 (zone 3)</td></tr><tr><td class="m">D6</td><td>IN4 (zone 4)</td></tr>
+    <tr><td class="m">D7</td><td>IN5 (zone 5)</td></tr>
+    <tr><td class="m">3V3</td><td>VCC <small>(rij met IN-pinnen)</small></td></tr>
+    <tr><td class="m">5 V +</td><td>JD-VCC <small>(jumper eraf)</small></td></tr>
+    <tr><td class="m">5 V − / GND</td><td>GND</td></tr></table>
+    <p class="mute"><small>Niet gebruiken: <b>D8</b> (boot faalt), <b>D3</b> = FLASH-knop, <b>D4</b> = LED. Gereserveerd: D0 hoofdklep/pomp (IN6), RX flowmeter, A0 regensensor.</small></p></div>
+</section>
+
+</main>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let status=null,zonesCfg=[],logItems=[],ws=null,wsRetry=1000,pollTimer=null,loggedIn=false;
+
+function toast(t){const m=$('#toast');m.textContent=t;m.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>m.style.display='none',4500)}
+async function api(path,method='GET',body){
+  const r=await fetch('/api'+path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+  if(r.status==401&&path!='/login'){showLogin();throw new Error('login')}
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){toast(j.message||('Fout '+r.status));throw new Error(j.error||r.status)}
+  return j}
+
+// ---------- login ----------
+function showLogin(){loggedIn=false;$('#login').classList.remove('hide');$('#nav').classList.add('hide');
+  document.querySelectorAll('.page').forEach(p=>p.classList.add('hide'));if(ws)ws.close()}
+async function doLogin(e){e.preventDefault();
+  try{await api('/login','POST',{password:$('#pw').value});$('#pw').value='';start()}catch(_){}}
+async function logout(){await api('/logout','POST').catch(()=>{});showLogin()}
+
+// ---------- routing ----------
+const pages={'':'dashboard',programmas:'programmas',zones:'zones',logboek:'logboek',instellingen:'instellingen',systeem:'systeem'};
+function route(){if(!loggedIn)return;const key=location.hash.replace(/^#\/?/,'');const p=pages[key]||'dashboard';
+  document.querySelectorAll('.page').forEach(s=>s.classList.toggle('hide',s.id!='p-'+p));
+  document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')=='#/'+key));
+  const on=$('nav a.on');if(on)on.scrollIntoView({inline:'center',block:'nearest'});
+  if(p=='zones')loadZones();if(p=='instellingen')loadSettings();if(p=='systeem')loadInfo()}
+window.addEventListener('hashchange',route);
+
+// ---------- dashboard ----------
+function fmt(s){if(s>=3600)return Math.floor(s/3600)+' u '+String(Math.floor(s%3600/60)).padStart(2,'0')+' min';
+  return s>=60?Math.floor(s/60)+':'+String(s%60).padStart(2,'0'):s+' s'}
+function renderStatus(){if(!status)return;
+  $('#s-open').textContent=status.active+' / '+status.max_concurrent;
+  $('#s-mode').textContent=status.mode;$('#s-factor').textContent=status.factor+' %';
+  const el=$('#zones');
+  if(el.children.length!=status.zones.length)el.innerHTML=status.zones.map(z=>`<div class="card zone" id="z${z.id}">
+    <div class="row"><h3>${z.id}. <span class="n"></span></h3><span class="badge"></span></div>
+    <div class="pin mute"><small>Pin <b>${z.pin}</b> → relais <b>IN${z.relay}</b></small></div>
+    <div class="big r">&nbsp;</div>
+    <div class="row"><input type="number" min="1" max="240" id="m${z.id}" aria-label="Minuten"><span class="mute">min</span>
+    <button class="p o1" onclick="openZ(${z.id},true)">Open</button><button class="o2" onclick="openZ(${z.id},false)" title="Open tot max looptijd">Open ∞</button>
+    <button class="c" onclick="closeZ(${z.id})">Sluit</button></div></div>`).join('');
+  for(const z of status.zones){const c=$('#z'+z.id);
+    c.querySelector('.n').textContent=z.name;c.classList.toggle('open',z.state=='open');
+    const b=c.querySelector('.badge');b.className='badge '+(z.enabled?z.state:'');
+    b.textContent=!z.enabled?'uitgeschakeld':{open:'open',pending:'wacht',closed:'dicht'}[z.state];
+    c.querySelector('.r').textContent=z.state=='closed'?' ':(z.state=='pending'?'Start zo…':'Nog '+fmt(z.remaining_s));
+    const inp=$('#m'+z.id);if(!inp.value&&document.activeElement!=inp)inp.value=Math.round(z.default_duration_s/60)||1;
+    c.querySelector('.o1').disabled=c.querySelector('.o2').disabled=!z.enabled;c.querySelector('.c').disabled=z.state=='closed'}}
+async function openZ(id,timed){const body=timed?{duration_s:Math.max(1,Math.round(parseFloat($('#m'+id).value)*60))}:{};
+  try{status.zones[id-1]=Object.assign(status.zones[id-1],await api('/zones/'+id+'/open','POST',body));renderStatus()}catch(_){}}
+async function closeZ(id){try{await api('/zones/'+id+'/close','POST')}catch(_){}}
+async function estop(){try{await api('/stop','POST');toast('Noodstop: alle kleppen dicht')}catch(_){}}
+// lokaal aftellen tussen status-pushes
+setInterval(()=>{if(!status)return;let any=false;
+  for(const z of status.zones)if(z.state=='open'&&z.remaining_s>0){z.remaining_s--;any=true}if(any)renderStatus()},1000);
+
+// ---------- live (WebSocket) ----------
+function setConn(on){$('#conn').innerHTML=`<span class="dot${on?' on':''}"></span> <small>${on?'live':'offline'}</small>`}
+function connect(){if(ws)return;ws=new WebSocket((location.protocol=='https:'?'wss://':'ws://')+location.host+'/ws');
+  ws.onopen=()=>{wsRetry=1000;setConn(true);clearInterval(pollTimer)};
+  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
+    if(m.type=='status'){status=m.data;renderStatus()}else if(m.type=='event')onEvent(m.event,m.data)};
+  ws.onclose=()=>{ws=null;setConn(false);if(!loggedIn)return;
+    clearInterval(pollTimer);pollTimer=setInterval(poll,5000);setTimeout(connect,wsRetry);wsRetry=Math.min(wsRetry*2,30000)}}
+async function poll(){try{status=await api('/status');renderStatus()}catch(_){}}
+
+const zn=d=>{const z=status&&status.zones[d.zone-1];return z?z.name:'Zone '+d.zone};
+const why={timer:'tijd om',max_looptijd:'max looptijd',handmatig:'handmatig',noodstop:'noodstop',uitgeschakeld:'uitgeschakeld',ota:'update',herstart:'herstart'};
+function describe(t,d){switch(t){
+  case 'zone_opened':return `${zn(d)} open${d.onbepaald?' (onbepaald, max '+fmt(d.duur_s)+')':' voor '+fmt(d.duur_s)} · ${d.bron}`;
+  case 'zone_closed':return `${zn(d)} dicht na ${fmt(d.duur_s)} · ${why[d.reden]||d.reden}`;
+  case 'command_rejected':return `Geweigerd: ${zn(d)} – ${{limiet:'te veel kleppen open',uitgeschakeld:'zone uitgeschakeld',ongeldige_zone:'onbekende zone'}[d.reden]||d.reden}`;
+  case 'max_runtime_reached':return `${zn(d)}: max looptijd bereikt`;
+  case 'emergency_stop':return `NOODSTOP · ${d.bron}`;
+  case 'update_started':return `Update gestart (${d.type})`;case 'update_finished':return 'Update klaar, herstarten';
+  case 'update_failed':return `Update mislukt: ${d.fout}`;case 'wifi_fallback_ap':return 'Fallback-AP aan';
+  default:return t+' '+JSON.stringify(d)}}
+function onEvent(t,d){logItems.unshift({t:new Date(),text:describe(t,d)});logItems.length=Math.min(logItems.length,100);renderLog();
+  if(t=='command_rejected'||t=='max_runtime_reached'||t=='emergency_stop')toast(describe(t,d))}
+function renderLog(){$('#log').innerHTML=logItems.length?logItems.map(i=>`<li><time>${i.t.toLocaleTimeString('nl-NL')}</time>${esc(i.text)}</li>`).join(''):'<li class="mute">Nog geen events.</li>'}
+
+// ---------- zones ----------
+async function loadZones(){try{zonesCfg=await api('/zones')}catch(_){return}
+  $('#zone-forms').innerHTML=zonesCfg.map(z=>`<form class="card" onsubmit="saveZone(event,${z.id})">
+    <div class="row"><h2 class="grow" style="margin:0">Zone ${z.id}</h2><span class="pin mute"><small>Pin <b>${z.pin}</b> → <b>IN${z.relay}</b></small></span></div>
+    <label for="zn${z.id}">Naam</label><input id="zn${z.id}" class="w" maxlength="23" required value="${esc(z.name)}">
+    <div class="row"><div><label for="zt${z.id}">Type</label><select id="zt${z.id}"><option value="gazon"${z.type=='gazon'?' selected':''}>Gazon</option><option value="border"${z.type=='border'?' selected':''}>Border / heg</option></select></div>
+    <div><label for="zd${z.id}">Standaardduur</label><input id="zd${z.id}" type="number" min="1" max="240" value="${Math.round(z.default_duration_s/60)}"> <span class="mute">min</span></div>
+    <div><label for="zm${z.id}">Max looptijd</label><input id="zm${z.id}" type="number" min="1" max="240" value="${Math.round(z.max_runtime_s/60)}"> <span class="mute">min</span></div></div>
+    <label class="row" style="font-weight:400"><input id="ze${z.id}" type="checkbox"${z.enabled?' checked':''}> Ingeschakeld</label>
+    <div class="row" style="margin-top:8px"><button class="p">Opslaan</button></div></form>`).join('')}
+async function saveZone(e,id){e.preventDefault();
+  const body={name:$('#zn'+id).value.trim(),type:$('#zt'+id).value,enabled:$('#ze'+id).checked,
+    default_duration_s:Math.round($('#zd'+id).value*60),max_runtime_s:Math.round($('#zm'+id).value*60)};
+  try{await api('/zones/'+id,'PUT',body);toast('Zone '+id+' opgeslagen')}catch(_){}}
+
+// ---------- instellingen ----------
+async function loadSettings(){try{const s=await api('/settings');$('#mc').value=s.max_concurrent;$('#sg').value=s.stagger_ms;
+  $('#pw-warn').classList.toggle('hide',!s.password_default);mcWarn();
+  $('#key-state').innerHTML='Voor Home Assistant en scripts: header <code>X-API-Key</code>. '+(s.api_key_default?'Nu actief: de key uit <code>secrets.h</code>.':'Er is een eigen key ingesteld.')}catch(_){}}
+function mcWarn(){$('#mc-warn').classList.toggle('hide',!($('#mc').value>2))}
+$('#mc').addEventListener('input',mcWarn);
+async function saveSafety(e){e.preventDefault();
+  try{await api('/settings','PUT',{max_concurrent:+$('#mc').value,stagger_ms:+$('#sg').value});toast('Opgeslagen')}catch(_){}}
+async function changePw(e){e.preventDefault();if($('#pw1').value!=$('#pw2').value){toast('Nieuwe wachtwoorden zijn niet gelijk');return}
+  try{await api('/settings/password','POST',{current:$('#pw0').value,new:$('#pw1').value});
+    ['#pw0','#pw1','#pw2'].forEach(s=>$(s).value='');toast('Wachtwoord gewijzigd');loadSettings()}catch(_){}}
+async function newKey(){if(!confirm('Nieuwe API-key maken? De huidige key (ook in Home Assistant) werkt daarna niet meer.'))return;
+  try{const r=await api('/settings/api-key','POST');$('#key-val').textContent=r.api_key;$('#key-new').classList.remove('hide');loadSettings()}catch(_){}}
+function copyKey(){navigator.clipboard.writeText($('#key-val').textContent).then(()=>toast('Gekopieerd'),()=>toast('Kopiëren lukt niet; selecteer de tekst handmatig'))}
+
+// ---------- systeem ----------
+async function loadInfo(){try{const i=await api('/info');const up=i.uptime_s;
+  const rows=[['Firmware','v'+i.version],['IP-adres',i.ip],['Hostname',i.hostname+'.local'],['WiFi-signaal',i.rssi+' dBm'],
+    ['Uptime',Math.floor(up/86400)+' d '+Math.floor(up%86400/3600)+' u '+Math.floor(up%3600/60)+' min'],
+    ['Vrij geheugen',(i.heap_free/1024).toFixed(1)+' KB (fragmentatie '+i.heap_frag+' %)'],['Laatste herstart',i.reset_reason],['Chip-id',i.chip_id]];
+  $('#info').innerHTML=rows.map(r=>`<tr><td class="k">${r[0]}</td><td>${esc(r[1])}</td></tr>`).join('')}catch(_){}}
+async function restore(inp){const f=inp.files[0];inp.value='';if(!f)return;let body;
+  try{body=JSON.parse(await f.text())}catch(_){toast('Geen geldig JSON-bestand');return}
+  if(!confirm('Zones en instellingen overschrijven met deze backup?'))return;
+  try{await api('/restore','POST',body);toast('Backup teruggezet')}catch(_){}}
+async function reboot(){if(!confirm('sqwrtr herstarten? Alle kleppen gaan dicht.'))return;
+  try{await api('/reboot','POST');toast('Herstarten… opnieuw inloggen over ±20 s');setTimeout(showLogin,1500)}catch(_){}}
+
+// ---------- start ----------
+async function start(){try{status=await api('/status')}catch(_){return}
+  loggedIn=true;$('#login').classList.add('hide');$('#nav').classList.remove('hide');renderStatus();renderLog();route();connect()}
+start();
+</script>
+</body>
+</html>

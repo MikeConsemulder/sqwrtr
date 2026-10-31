@@ -6,6 +6,7 @@
 #include "auth.h"
 #include "zones.h"
 #include "web.h"
+#include "storage.h"
 #include "log.h"
 
 namespace api {
@@ -57,8 +58,6 @@ static const char* stateName(zones::State s) {
     }
 }
 
-static const char* typeName(zones::Type t) { return t == zones::Type::Border ? "border" : "gazon"; }
-
 static void zoneJson(JsonObject o, uint8_t z, bool full) {
     const zones::Config& c = zones::config(z);
     o["id"] = z + 1;
@@ -68,11 +67,9 @@ static void zoneJson(JsonObject o, uint8_t z, bool full) {
     o["pin"] = ZONE_PIN_LABELS[z];
     o["gpio"] = ZONE_PINS[z];
     o["relay"] = z + 1;  // relaisingang IN<n>
-    if (!full) return;
-    o["type"] = typeName(c.type);
     o["enabled"] = c.enabled;
     o["default_duration_s"] = c.defaultDurationS;
-    o["max_runtime_s"] = c.maxRuntimeS;
+    if (full) storage::zoneToJson(o, c);
 }
 
 // Parse "3" → zone-index 2; -1 als ongeldig.
@@ -85,8 +82,7 @@ static int parseZone(const String& s) {
 
 // ---------- endpoints ----------
 
-static void getStatus(AsyncWebServerRequest* req) {
-    JsonDocument doc;
+void buildStatus(JsonDocument& doc) {
     doc["mode"] = "auto";  // TODO fase 5: modi
     JsonArray arr = doc["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < ZONE_COUNT; i++) zoneJson(arr.add<JsonObject>(), i, false);
@@ -96,6 +92,11 @@ static void getStatus(AsyncWebServerRequest* req) {
     doc["skip"] = nullptr;         // TODO fase 5
     doc["factor"] = 100;           // TODO fase 5
     doc["uptime_s"] = millis() / 1000;
+}
+
+static void getStatus(AsyncWebServerRequest* req) {
+    JsonDocument doc;
+    buildStatus(doc);
     sendJson(req, 200, doc);
 }
 
@@ -118,38 +119,13 @@ static void getInfo(AsyncWebServerRequest* req) {
 static void putZone(AsyncWebServerRequest* req, uint8_t z) {
     JsonDocument body;
     if (!readBody(req, body)) return;
-    zones::Config next = zones::config(z);
-
-    if (body["name"].is<const char*>()) {
-        const char* n = body["name"];
-        if (!n[0] || strlen(n) >= sizeof(next.name)) {
-            return sendError(req, 400, "invalid_field", "name: 1-23 tekens");
-        }
-        strlcpy(next.name, n, sizeof(next.name));
+    const char* err = nullptr;
+    if (!storage::zoneFromJson(body.as<JsonObjectConst>(), zones::config(z), &err)) {
+        return sendError(req, 400, "invalid_field", err);
     }
-    if (body["type"].is<const char*>()) {
-        const char* t = body["type"];
-        if (!strcmp(t, "gazon")) next.type = zones::Type::Gazon;
-        else if (!strcmp(t, "border")) next.type = zones::Type::Border;
-        else return sendError(req, 400, "invalid_field", "type: gazon of border");
-    }
-    if (body["enabled"].is<bool>()) next.enabled = body["enabled"];
-    if (!body["max_runtime_s"].isNull()) {
-        uint32_t v = body["max_runtime_s"] | 0u;
-        if (v < 1 || v > 4 * 3600) return sendError(req, 400, "invalid_field", "max_runtime_s: 1-14400");
-        next.maxRuntimeS = v;
-    }
-    if (!body["default_duration_s"].isNull()) {
-        uint32_t v = body["default_duration_s"] | 0u;
-        if (v < 1) return sendError(req, 400, "invalid_field", "default_duration_s: minimaal 1");
-        next.defaultDurationS = v;
-    }
-    if (next.defaultDurationS > next.maxRuntimeS) {
-        return sendError(req, 400, "invalid_field", "default_duration_s mag niet groter zijn dan max_runtime_s");
-    }
-
-    zones::config(z) = next;  // TODO fase 5: opslaan in LittleFS
-    if (!next.enabled) zones::close(z, zones::Source::Api, "uitgeschakeld");
+    if (!zones::config(z).enabled) zones::close(z, zones::Source::Api, "uitgeschakeld");
+    storage::markDirty();
+    web::markStatusDirty();
 
     JsonDocument doc;
     zoneJson(doc.to<JsonObject>(), z, true);
@@ -192,25 +168,66 @@ static void getSettings(AsyncWebServerRequest* req) {
     doc["max_concurrent"] = zones::settings().maxConcurrent;
     doc["stagger_ms"] = zones::settings().staggerMs;
     doc["zone_count"] = ZONE_COUNT;
+    doc["password_default"] = storage::passwordIsDefault();
+    doc["api_key_default"] = storage::apiKeyIsDefault();
     sendJson(req, 200, doc);
 }
 
 static void putSettings(AsyncWebServerRequest* req) {
     JsonDocument body;
     if (!readBody(req, body)) return;
-    zones::Settings next = zones::settings();
-    if (!body["max_concurrent"].isNull()) {
-        uint32_t v = body["max_concurrent"] | 0u;
-        if (v < 1 || v > ZONE_COUNT) return sendError(req, 400, "invalid_field", "max_concurrent: 1-5");
-        next.maxConcurrent = v;
+    const char* err = nullptr;
+    if (!storage::settingsFromJson(body.as<JsonObjectConst>(), zones::settings(), &err)) {
+        return sendError(req, 400, "invalid_field", err);
     }
-    if (!body["stagger_ms"].isNull()) {
-        uint32_t v = body["stagger_ms"] | 0xFFFFFFFFu;
-        if (v > 10000) return sendError(req, 400, "invalid_field", "stagger_ms: 0-10000");
-        next.staggerMs = v;
-    }
-    zones::settings() = next;  // TODO fase 5: opslaan in LittleFS
+    storage::markDirty();
+    web::markStatusDirty();
     getSettings(req);
+}
+
+static void changePassword(AsyncWebServerRequest* req) {
+    JsonDocument body;
+    if (!readBody(req, body)) return;
+    if (!auth::passwordOk(body["current"] | "")) {
+        return sendError(req, 403, "wrong_password", "Huidig wachtwoord klopt niet");
+    }
+    const char* next = body["new"] | "";
+    size_t len = strlen(next);
+    if (len < 8 || len > 64) return sendError(req, 400, "invalid_field", "Nieuw wachtwoord: 8-64 tekens");
+    storage::setPassword(next);
+    auth::endAllSessions();  // overal uitloggen, behalve hier (nieuwe sessie)
+    LOG("Web: admin-wachtwoord gewijzigd");
+    AsyncResponseStream* res = req->beginResponseStream("application/json");
+    res->addHeader("Set-Cookie", auth::createSession());
+    res->print("{\"ok\":true}");
+    req->send(res);
+}
+
+static void newApiKey(AsyncWebServerRequest* req) {
+    JsonDocument doc;
+    doc["api_key"] = storage::generateApiKey();
+    LOG("Web: nieuwe API-key gegenereerd");
+    sendJson(req, 200, doc);
+}
+
+static void getBackup(AsyncWebServerRequest* req) {
+    JsonDocument doc;
+    storage::exportBackup(doc);
+    AsyncResponseStream* res = req->beginResponseStream("application/json");
+    res->addHeader("Content-Disposition", "attachment; filename=\"sqwrtr-config.json\"");
+    serializeJsonPretty(doc, *res);
+    req->send(res);
+}
+
+static void restore(AsyncWebServerRequest* req) {
+    JsonDocument body;
+    if (!readBody(req, body)) return;
+    const char* err = nullptr;
+    if (!storage::importBackup(body.as<JsonObjectConst>(), &err)) {
+        return sendError(req, 400, "invalid_backup", err);
+    }
+    web::markStatusDirty();
+    sendOk(req);
 }
 
 static void login(AsyncWebServerRequest* req) {
@@ -263,6 +280,10 @@ void handle(AsyncWebServerRequest* req) {
         if (m == HTTP_GET) return getSettings(req);
         if (m == HTTP_PUT) return putSettings(req);
     }
+    if (path == "/settings/password" && m == HTTP_POST) return changePassword(req);
+    if (path == "/settings/api-key" && m == HTTP_POST) return newApiKey(req);
+    if (path == "/backup" && m == HTTP_GET) return getBackup(req);
+    if (path == "/restore" && m == HTTP_POST) return restore(req);
     if (path == "/reboot" && m == HTTP_POST) {
         web::scheduleRestart();
         return sendOk(req);

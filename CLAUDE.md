@@ -145,6 +145,9 @@ Basis `/api`, JSON. Auth: header `X-API-Key: <key>` (of `Authorization: Bearer <
 | PUT | `/api/mode` | `auto` / `handmatig` / `winter` |
 | POST | `/api/test` | Testcyclus |
 | GET / PUT | `/api/settings` | Veiligheid, factor, MQTT, tijdzone, wachtwoorden, API-key |
+| POST | `/api/settings/password` | body `{ "current": "...", "new": "..." }` (8–64 tekens) |
+| POST | `/api/settings/api-key` | Nieuwe API-key; alleen in dit antwoord zichtbaar |
+| GET / POST | `/api/backup`, `/api/restore` | Zones + instellingen als JSON (zonder wachtwoord/API-key) |
 | GET | `/api/log` | Logboek |
 | POST | `/api/reboot` | Herstart |
 | WS | `/ws` | Live events en status-push voor de web-UI |
@@ -188,6 +191,7 @@ Later: `leak_detected`, `no_flow` (flowmeter), `rain_detected` (regensensor).
 - Mobiel-eerst, licht en snel, NL. Dashboard met 5 zonekaarten (status, resterende tijd, open-voor-X / open / sluiten), grote noodstopknop, actief programma + wachtrij, modus, regenpauze.
 - Pagina's: Dashboard · Programma's (editor) · Zones · Logboek · Instellingen (veiligheid, MQTT, API-key genereren, wachtwoord, tijd) · Systeem (info, update-upload, herstart, backup/restore config als JSON).
 - Live updates via WebSocket.
+- Bron: `web/index.html` (één bestand, vanilla). `tools/build_web.py` maakt er bij elke build een gzip-PROGMEM-header van (`include/web_ui.h`, niet in git). UI zit dus in de firmware: één OTA-update werkt alles bij. `/update` staat los daarvan in `src/web_pages.h`.
 
 ---
 

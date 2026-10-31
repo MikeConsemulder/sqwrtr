@@ -1,6 +1,7 @@
 #include "events.h"
 #include <stdarg.h>
 #include "log.h"
+#include "web.h"
 
 namespace events {
 
@@ -13,6 +14,8 @@ void emit(const char* type, const char* detailFmt, ...) {
         va_end(args);
     }
     LOG("EVENT %s %s", type, detail);
+    web::pushEvent(type, detail);
+    // TODO fase 6: ook naar MQTT
 }
 
 }  // namespace events

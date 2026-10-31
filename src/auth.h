@@ -15,9 +15,13 @@ Who check(AsyncWebServerRequest* req);
 
 bool passwordOk(const char* password);
 
+// HTTP Basic met gebruiker "admin" en het admin-wachtwoord (voor curl naar /update).
+bool basicOk(AsyncWebServerRequest* req);
+
 // Maakt een nieuwe sessie; geeft de Set-Cookie-waarde terug.
 String createSession();
 void endSession(AsyncWebServerRequest* req);
+void endAllSessions();  // na wachtwoordwijziging
 
 static const char COOKIE_NAME[] = "sqwrtr_session";
 

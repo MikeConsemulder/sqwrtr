@@ -8,12 +8,21 @@
 #include "events.h"
 #include "log.h"
 #include "web_pages.h"
+#include "web_ui.h"  // gegenereerd door tools/build_web.py
 
 namespace web {
 
 static AsyncWebServer server(80);
+static AsyncWebSocket ws("/ws");
 
-static const size_t MAX_BODY = 1024;
+static const size_t MAX_BODY = 2048;  // ruim genoeg voor een restore van config.json
+static const uint8_t MAX_WS_CLIENTS = 4;
+static const uint32_t WS_PUSH_MIN_MS = 250;      // status-pushes bundelen
+static const uint32_t WS_HEARTBEAT_MS = 15000;   // ook zonder wijziging af en toe status
+
+static bool statusDirty = false;
+static uint32_t lastStatusPush = 0;
+static uint32_t lastCleanup = 0;
 static const uint32_t UPDATE_STALL_MS = 30000;  // upload afgebroken → Update vrijgeven
 
 static bool restartPending = false;
@@ -32,6 +41,32 @@ void scheduleRestart() {
     restartAt = millis() + 500;
 }
 
+void markStatusDirty() { statusDirty = true; }
+
+void pushEvent(const char* type, const char* detailJson) {
+    statusDirty = true;
+    if (!ws.count()) return;
+    String msg;
+    msg.reserve(48 + strlen(type) + strlen(detailJson));
+    msg += F("{\"type\":\"event\",\"event\":\"");
+    msg += type;
+    msg += F("\",\"data\":");
+    msg += detailJson;
+    msg += '}';
+    ws.textAll(msg);
+}
+
+static void pushStatus() {
+    JsonDocument doc;
+    doc["type"] = "status";
+    JsonDocument status;
+    api::buildStatus(status);
+    doc["data"] = status;
+    String msg;
+    serializeJson(doc, msg);
+    ws.textAll(msg);
+}
+
 // Body van API-requests verzamelen in req->_tempObject (wordt door de library vrijgegeven).
 static void collectBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
     if (total > MAX_BODY) return;
@@ -47,7 +82,7 @@ static void collectBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, s
 // /update accepteert sessiecookie, API-key of HTTP Basic (admin:<admin-wachtwoord>),
 // zodat het ook met curl werkt als de webpagina niet meewerkt.
 static bool updateAuthorized(AsyncWebServerRequest* req) {
-    return auth::check(req) != auth::Who::None || req->authenticate("admin", ADMIN_PASSWORD);
+    return auth::check(req) != auth::Who::None || auth::basicOk(req);
 }
 
 static void failUpdate(int code, const String& error) {
@@ -132,16 +167,39 @@ static void sendPage(AsyncWebServerRequest* req, const char* const (&parts)[N]) 
 }
 
 void begin() {
+    // Zelfde auth als de API (sessiecookie wordt bij de handshake meegestuurd).
+    ws.handleHandshake([](AsyncWebServerRequest* req) { return auth::check(req) != auth::Who::None; });
+    ws.onEvent([](AsyncWebSocket*, AsyncWebSocketClient*, AwsEventType type, void*, uint8_t*, size_t) {
+        if (type == WS_EVT_CONNECT) statusDirty = true;  // nieuwe client krijgt meteen de status
+    });
+    server.addHandler(&ws);
+
     server.on("/api", HTTP_ANY, api::handle, nullptr, collectBody);
     server.on(AsyncURIMatcher::exact("/update"), HTTP_GET, [](AsyncWebServerRequest* req) { sendPage(req, UPDATE_PAGE); });
     server.on(AsyncURIMatcher::exact("/update"), HTTP_POST, onUploadDone, onUpload);
-    server.on(AsyncURIMatcher::exact("/"), HTTP_GET, [](AsyncWebServerRequest* req) { sendPage(req, INDEX_PAGE); });
+    server.on(AsyncURIMatcher::exact("/"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        AsyncWebServerResponse* res = req->beginResponse(200, "text/html; charset=utf-8", WEB_UI_GZ, WEB_UI_GZ_LEN);
+        res->addHeader("Content-Encoding", "gzip");
+        res->addHeader("Cache-Control", "no-cache");
+        req->send(res);
+    });
     server.onNotFound([](AsyncWebServerRequest* req) { req->send(404, "text/plain", "Niet gevonden"); });
     server.begin();
     LOG("Web: server gestart op poort 80");
 }
 
 void loop() {
+    const uint32_t now = millis();
+    if (now - lastCleanup >= 1000) {
+        lastCleanup = now;
+        ws.cleanupClients(MAX_WS_CLIENTS);
+    }
+    if (ws.count() && now - lastStatusPush >= (statusDirty ? WS_PUSH_MIN_MS : WS_HEARTBEAT_MS)) {
+        statusDirty = false;
+        lastStatusPush = now;
+        pushStatus();
+    }
+
     if (updating && millis() - updateLastData > UPDATE_STALL_MS) failUpdate(500, "Upload afgebroken");
     if (restartPending && (int32_t)(millis() - restartAt) >= 0) {
         LOG("Herstarten...");

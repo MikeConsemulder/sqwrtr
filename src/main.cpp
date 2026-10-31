@@ -1,4 +1,4 @@
-// sqwrtr – fase 3: REST-API + auth + /update
+// sqwrtr – fase 4: web-UI + opgeslagen instellingen
 // Veilige pin-init, WiFi + fallback-AP, mDNS, ArduinoOTA, zone-manager met
 // veiligheidsregels, FLASH-knop, status-LED, serieel testconsole en webserver.
 
@@ -8,6 +8,7 @@
 #include "events.h"
 #include "relays.h"
 #include "zones.h"
+#include "storage.h"
 #include "net.h"
 #include "web.h"
 #include "button.h"
@@ -50,6 +51,7 @@ void setup() {
     ESP.wdtEnable(WDTO_8S);
 
     zones::begin();
+    storage::begin();  // overschrijft standaardwaarden met opgeslagen config
     net::begin({
         []() { return zones::activeCount() == 0 && !web::updateInProgress(); },  // geen OTA met open kleppen
         []() { zones::closeAll(zones::Source::System, "ota"); relays::allOff(); },
@@ -61,6 +63,7 @@ void loop() {
     net::loop();
     web::loop();
     zones::loop();
+    storage::loop();
     button::loop();
     console::loop();
 
