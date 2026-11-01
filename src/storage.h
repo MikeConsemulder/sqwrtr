@@ -13,6 +13,7 @@ void loop();
 
 // Aanroepen na elke wijziging van zones/instellingen/inlog.
 void markDirty();
+void flush();  // openstaande wijziging direct schrijven (vóór herstart/update)
 
 // Gedeeltelijke update: alleen aanwezige velden worden overgenomen en gevalideerd.
 // Bij een fout blijft `out` ongewijzigd en wijst *err naar een melding.

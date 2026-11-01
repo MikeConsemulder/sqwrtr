@@ -7,6 +7,9 @@
 #include "zones.h"
 #include "events.h"
 #include "log.h"
+#include "storage.h"
+#include "history.h"
+#include "programs.h"
 #include "web_pages.h"
 #include "web_ui.h"  // gegenereerd door tools/build_web.py
 
@@ -15,7 +18,7 @@ namespace web {
 static AsyncWebServer server(80);
 static AsyncWebSocket ws("/ws");
 
-static const size_t MAX_BODY = 2048;  // ruim genoeg voor een restore van config.json
+static const size_t MAX_BODY = 6144;  // restore van config.json (incl. 8 programma's)
 static const uint8_t MAX_WS_CLIENTS = 4;
 static const uint32_t WS_PUSH_MIN_MS = 250;      // status-pushes bundelen
 static const uint32_t WS_HEARTBEAT_MS = 15000;   // ook zonder wijziging af en toe status
@@ -111,6 +114,8 @@ static void onUpload(AsyncWebServerRequest* req, const String& filename, size_t 
         if (!Update.begin(size, fs ? U_FS : U_FLASH)) return failUpdate(500, Update.getErrorString());
 
         updating = true;
+        storage::flush();
+        history::flush();
         LOG("Update: start %s (%s)", fs ? "filesystem" : "firmware", filename.c_str());
         events::emit("update_started", "{\"type\":\"%s\",\"bron\":\"web\"}", fs ? "filesystem" : "firmware");
     }
@@ -203,7 +208,10 @@ void loop() {
     if (updating && millis() - updateLastData > UPDATE_STALL_MS) failUpdate(500, "Upload afgebroken");
     if (restartPending && (int32_t)(millis() - restartAt) >= 0) {
         LOG("Herstarten...");
+        programs::abortAll("herstart");
         zones::closeAll(zones::Source::System, "herstart");
+        storage::flush();
+        history::flush();
         ESP.restart();
     }
 }

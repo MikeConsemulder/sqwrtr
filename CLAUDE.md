@@ -141,7 +141,7 @@ Basis `/api`, JSON. Auth: header `X-API-Key: <key>` (of `Authorization: Bearer <
 | POST | `/api/stop` | Noodstop |
 | GET / POST / PUT / DELETE | `/api/programs[/{id}]` | Programma's beheren |
 | POST | `/api/programs/{id}/run` | Programma nu starten |
-| POST | `/api/skip` | body `{ "hours": 24, "reason": "regen verwacht" }`; `{ "hours": 0 }` heft op |
+| POST | `/api/skip` | body `{ "hours": 24, "reason": "regen verwacht" }`; `{ "next": true, "reason": "..." }` slaat volgende run over; `{ "hours": 0 }` heft op |
 | PUT | `/api/mode` | `auto` / `handmatig` / `winter` |
 | POST | `/api/test` | Testcyclus |
 | GET / PUT | `/api/settings` | Veiligheid, factor, MQTT, tijdzone, wachtwoorden, API-key |

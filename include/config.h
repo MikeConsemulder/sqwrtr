@@ -34,6 +34,23 @@ static const uint16_t DEFAULT_STAGGER_MS     = 500;       // vertraging tussen i
 static const uint32_t DEFAULT_MAX_RUNTIME_S  = 120 * 60;  // max looptijd per klep
 static const uint32_t DEFAULT_DURATION_S     = 10 * 60;   // standaardduur per zone
 
+// ---- Programma's ----
+static const uint8_t  MAX_PROGRAMS        = 8;
+static const uint8_t  MAX_STEPS           = 10;   // stappen per programma
+static const uint8_t  MAX_STARTS          = 4;    // starttijden per programma
+static const uint8_t  MAX_RUNS            = 8;    // lopende + wachtende runs
+static const uint16_t DEFAULT_ZONE_PAUSE_S = 5;   // pauze tussen zones in een programma
+static const uint16_t TEST_STEP_S         = 60;   // testcyclus: elke zone 1 min
+
+// ---- Tijd ----
+static const char DEFAULT_TZ[]   = "CET-1CEST,M3.5.0,M10.5.0/3";
+static const char NTP_SERVER_1[] = "nl.pool.ntp.org";
+static const char NTP_SERVER_2[] = "pool.ntp.org";
+
+// ---- Logboek ----
+static const uint8_t  LOG_ENTRIES     = 200;
+static const uint32_t LOG_SAVE_MS     = 10UL * 60 * 1000;  // max elke 10 min naar flash
+
 // ---- FLASH-knop ----
 static const uint32_t BUTTON_DEBOUNCE_MS = 50;
 static const uint32_t BUTTON_ESTOP_MS    = 2000;   // lang indrukken → noodstop

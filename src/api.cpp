@@ -1,12 +1,16 @@
 #include "api.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <memory>
 #include <ESP8266WiFi.h>
 #include "config.h"
 #include "auth.h"
 #include "zones.h"
 #include "web.h"
 #include "storage.h"
+#include "programs.h"
+#include "history.h"
+#include "ntp.h"
 #include "log.h"
 
 namespace api {
@@ -69,7 +73,9 @@ static void zoneJson(JsonObject o, uint8_t z, bool full) {
     o["relay"] = z + 1;  // relaisingang IN<n>
     o["enabled"] = c.enabled;
     o["default_duration_s"] = c.defaultDurationS;
-    if (full) storage::zoneToJson(o, c);
+    if (!full) return;
+    storage::zoneToJson(o, c);
+    history::runtimeJson(o["runtime"].to<JsonObject>(), z);
 }
 
 // Parse "3" → zone-index 2; -1 als ongeldig.
@@ -83,14 +89,11 @@ static int parseZone(const String& s) {
 // ---------- endpoints ----------
 
 void buildStatus(JsonDocument& doc) {
-    doc["mode"] = "auto";  // TODO fase 5: modi
+    programs::statusJson(doc.to<JsonObject>());  // modus, factor, regenpauze, runs, wachtrij, tijd
     JsonArray arr = doc["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < ZONE_COUNT; i++) zoneJson(arr.add<JsonObject>(), i, false);
     doc["active"] = zones::activeCount();
     doc["max_concurrent"] = zones::settings().maxConcurrent;
-    doc["queue"].to<JsonArray>();  // TODO fase 5
-    doc["skip"] = nullptr;         // TODO fase 5
-    doc["factor"] = 100;           // TODO fase 5
     doc["uptime_s"] = millis() / 1000;
 }
 
@@ -158,6 +161,8 @@ static void openZone(AsyncWebServerRequest* req, uint8_t z, zones::Source src) {
             return sendError(req, 409, "limit_reached", msg);
         case zones::Result::Disabled:
             return sendError(req, 409, "zone_disabled", "Zone is uitgeschakeld");
+        case zones::Result::Locked:
+            return sendError(req, 409, "winter", "Wintermodus: alles geblokkeerd");
         default:
             return sendError(req, 404, "not_found", "Onbekende zone");
     }
@@ -168,6 +173,8 @@ static void getSettings(AsyncWebServerRequest* req) {
     doc["max_concurrent"] = zones::settings().maxConcurrent;
     doc["stagger_ms"] = zones::settings().staggerMs;
     doc["zone_count"] = ZONE_COUNT;
+    doc["timezone"] = ntp::timezone();
+    programs::settingsToJson(doc.as<JsonObject>());
     doc["password_default"] = storage::passwordIsDefault();
     doc["api_key_default"] = storage::apiKeyIsDefault();
     sendJson(req, 200, doc);
@@ -176,10 +183,21 @@ static void getSettings(AsyncWebServerRequest* req) {
 static void putSettings(AsyncWebServerRequest* req) {
     JsonDocument body;
     if (!readBody(req, body)) return;
+    // Alles valideren vóór toepassen
     const char* err = nullptr;
-    if (!storage::settingsFromJson(body.as<JsonObjectConst>(), zones::settings(), &err)) {
+    JsonObjectConst in = body.as<JsonObjectConst>();
+    zones::Settings zs = zones::settings();
+    programs::Settings ps = programs::settings();
+    if (!storage::settingsFromJson(in, zs, &err) || !programs::settingsFromJson(in, ps, &err)) {
         return sendError(req, 400, "invalid_field", err);
     }
+    const char* tz = in["timezone"] | "";
+    if (!in["timezone"].isNull() && (strlen(tz) < 3 || strlen(tz) > 47)) {
+        return sendError(req, 400, "invalid_field", "timezone: POSIX-tijdzone, 3-47 tekens");
+    }
+    zones::settings() = zs;
+    programs::settings() = ps;
+    if (tz[0]) ntp::setTimezone(tz);
     storage::markDirty();
     web::markStatusDirty();
     getSettings(req);
@@ -228,6 +246,108 @@ static void restore(AsyncWebServerRequest* req) {
     }
     web::markStatusDirty();
     sendOk(req);
+}
+
+static void putProgram(AsyncWebServerRequest* req, uint8_t id, bool create) {
+    JsonDocument body;
+    if (!readBody(req, body)) return;
+    if (create) {
+        id = programs::freeId();
+        if (!id) return sendError(req, 409, "full", "Maximaal 8 programma's");
+    }
+    programs::Program p;
+    const char* err = nullptr;
+    if (!programs::fromJson(body.as<JsonObjectConst>(), p, &err)) return sendError(req, 400, "invalid_field", err);
+    programs::store(id, p);
+    JsonDocument doc;
+    programs::toJson(doc.to<JsonObject>(), id);
+    sendJson(req, create ? 201 : 200, doc);
+}
+
+static void runResult(AsyncWebServerRequest* req, programs::RunResult r) {
+    using programs::RunResult;
+    if (r == RunResult::Ok) return sendOk(req);
+    const int code = r == RunResult::NotFound ? 404 : 409;
+    const char* error = r == RunResult::NotFound ? "not_found"
+                      : r == RunResult::Empty ? "empty"
+                      : r == RunResult::Winter ? "winter"
+                      : r == RunResult::AlreadyRunning ? "already_running" : "queue_full";
+    sendError(req, code, error, programs::runResultMessage(r));
+}
+
+static void skip(AsyncWebServerRequest* req, zones::Source src) {
+    JsonDocument body;
+    if (!readBody(req, body)) return;
+    const char* reason = body["reason"] | "";
+    if (body["next"] | false) {
+        programs::setSkipNext(reason, src);
+        return sendOk(req);
+    }
+    if (body["hours"].isNull()) return sendError(req, 400, "invalid_field", "hours (0 = opheffen) of next: true");
+    int hours = body["hours"] | -1;
+    if (hours < 0 || hours > 24 * 14) return sendError(req, 400, "invalid_field", "hours: 0-336");
+    if (!programs::setSkipHours(hours, reason, src)) {
+        return sendError(req, 409, "no_time", "Klok nog niet gezet (geen NTP)");
+    }
+    sendOk(req);
+}
+
+static void putMode(AsyncWebServerRequest* req, zones::Source src) {
+    JsonDocument body;
+    if (!readBody(req, body)) return;
+    programs::Mode m;
+    if (!programs::parseMode(body["mode"] | "", m)) {
+        return sendError(req, 400, "invalid_field", "mode: auto, handmatig of winter");
+    }
+    programs::setMode(m, src);
+    JsonDocument doc;
+    doc["mode"] = programs::modeName();
+    sendJson(req, 200, doc);
+}
+
+static void getLog(AsyncWebServerRequest* req) {
+    uint16_t limit = 50;
+    if (req->hasParam("limit")) limit = constrain(req->getParam("limit")->value().toInt(), 1, LOG_ENTRIES);
+    // Regel voor regel streamen (chunked) i.p.v. alles in één JsonDocument.
+    struct State {
+        uint16_t next = 0, limit;
+        bool opened = false, closed = false;
+        char pending[176];
+        size_t pendingLen = 0, pendingPos = 0;
+    };
+    auto st = std::make_shared<State>();
+    st->limit = limit;
+    req->send(req->beginChunkedResponse("application/json", [st](uint8_t* buf, size_t maxLen, size_t) -> size_t {
+        size_t n = 0;
+        while (n < maxLen) {
+            if (st->pendingPos < st->pendingLen) {  // rest van vorige regel
+                size_t c = std::min(st->pendingLen - st->pendingPos, maxLen - n);
+                memcpy(buf + n, st->pending + st->pendingPos, c);
+                st->pendingPos += c;
+                n += c;
+                continue;
+            }
+            if (st->closed) break;
+            char* p = st->pending;
+            size_t len = 0;
+            if (!st->opened) {
+                st->opened = true;
+                p[len++] = '[';
+            }
+            size_t e = st->next < st->limit ? history::entryJson(st->next, p + len + 1, sizeof(st->pending) - len - 1) : 0;
+            if (e) {
+                p[len] = st->next ? ',' : ' ';
+                len += 1 + e;
+                st->next++;
+            } else {
+                p[len++] = ']';
+                st->closed = true;
+            }
+            st->pendingLen = len;
+            st->pendingPos = 0;
+        }
+        return n;  // 0 = klaar
+    }));
 }
 
 static void login(AsyncWebServerRequest* req) {
@@ -317,11 +437,37 @@ void handle(AsyncWebServerRequest* req) {
         }
     }
 
-    // Komen in fase 5
-    if (path.startsWith("/programs") || path == "/skip" || path == "/mode" || path == "/test" ||
-        path == "/log") {
-        return sendError(req, 501, "not_implemented", "Nog niet beschikbaar (fase 5)");
+    if (path == "/programs") {
+        if (m == HTTP_GET) {
+            JsonDocument doc;
+            programs::listJson(doc.to<JsonArray>());
+            return sendJson(req, 200, doc);
+        }
+        if (m == HTTP_POST) return putProgram(req, 0, true);
     }
+    if (path.startsWith("/programs/")) {
+        String rest = path.substring(10);
+        int slash = rest.indexOf('/');
+        String action = slash < 0 ? "" : rest.substring(slash + 1);
+        String num = slash < 0 ? rest : rest.substring(0, slash);
+        int id = num.toInt();
+        if (num != String(id) || !programs::exists(id)) return sendError(req, 404, "not_found", "Onbekend programma");
+        if (action == "" && m == HTTP_GET) {
+            JsonDocument doc;
+            programs::toJson(doc.to<JsonObject>(), id);
+            return sendJson(req, 200, doc);
+        }
+        if (action == "" && m == HTTP_PUT) return putProgram(req, id, false);
+        if (action == "" && m == HTTP_DELETE) {
+            programs::remove(id);
+            return sendOk(req);
+        }
+        if (action == "run" && m == HTTP_POST) return runResult(req, programs::runNow(id, src));
+    }
+    if (path == "/test" && m == HTTP_POST) return runResult(req, programs::runNow(0, src));
+    if (path == "/skip" && m == HTTP_POST) return skip(req, src);
+    if (path == "/mode" && m == HTTP_PUT) return putMode(req, src);
+    if (path == "/log" && m == HTTP_GET) return getLog(req);
 
     sendError(req, 404, "not_found", "Onbekend endpoint of methode");
 }

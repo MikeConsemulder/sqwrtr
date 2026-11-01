@@ -45,6 +45,16 @@ code.key{display:block;word-break:break-all;font-size:1.05em;padding:10px;backgr
 .log li{padding:8px 0;border-bottom:1px solid var(--line);list-style:none}.log{padding:0;margin:0}
 .log time{color:var(--mute);font-variant-numeric:tabular-nums;margin-right:8px}
 #toast{position:fixed;left:16px;right:16px;bottom:16px;max-width:688px;margin:auto;padding:12px 14px;border-radius:10px;background:var(--fg);color:var(--bg);display:none;z-index:9}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;border:0;border-radius:0;background:var(--card)}.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--acc);color:#fff}.seg button.on.winter{background:#3b6ea8}
+.days{display:flex;gap:6px;flex-wrap:wrap}.days label{margin:0;font-weight:500}
+.days input{display:none}.days span{display:inline-block;min-width:44px;text-align:center;padding:8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.days input:checked+span{background:var(--acc);border-color:var(--acc);color:#fff}
+.steps .row{margin:6px 0}.steps select{flex:1;min-width:0}
+.prog h3{margin:0;font-size:1.05em;flex:1}.prog.off{opacity:.6}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:8px 0}.kv dt{color:var(--mute)}.kv dd{margin:0}
+input[type=range]{width:100%;padding:0;accent-color:var(--acc)}
 .hide{display:none!important}
 @media(max-width:420px){
   .stat{padding:8px 10px}.stat b{font-size:1em}
@@ -71,23 +81,54 @@ code.key{display:block;word-break:break-all;font-size:1.05em;padding:10px;backgr
   <div class="card"><button class="stop" onclick="estop()">NOODSTOP</button></div>
   <div class="stats">
     <div class="stat"><small>Open</small><b id="s-open">–</b></div>
-    <div class="stat"><small>Modus</small><b id="s-mode">–</b></div>
     <div class="stat"><small>Factor</small><b id="s-factor">–</b></div>
+    <div class="stat"><small>Tijd</small><b id="s-time">–</b></div>
+  </div>
+  <div class="card">
+    <div class="seg" id="modes"><button data-m="auto">Auto</button><button data-m="handmatig">Handmatig</button><button data-m="winter" class="winter">Winter</button></div>
+    <p class="mute" id="mode-text" style="margin:8px 0 0"></p>
+  </div>
+  <div class="card" id="runs-card">
+    <div class="row"><h2 class="grow" style="margin:0">Programma</h2><button onclick="testCycle()" id="test-btn">Testcyclus</button></div>
+    <div id="runs"></div>
+    <p class="mute" id="next-run" style="margin:8px 0 0"></p>
+  </div>
+  <div class="card" id="skip-card">
+    <div class="row"><h2 class="grow" style="margin:0">Regenpauze</h2><span class="badge" id="skip-badge">uit</span></div>
+    <p id="skip-text" class="mute" style="margin:8px 0"></p>
+    <div class="row"><button onclick="skipHours(24)">24 uur overslaan</button><button onclick="skipNextRun()">Volgende run overslaan</button>
+    <button id="skip-off" onclick="skipHours(0)">Opheffen</button></div>
   </div>
   <div id="zones"></div>
-  <p class="mute"><small>Programma's, wachtrij en regenpauze komen in fase 5.</small></p>
 </section>
 
 <section id="p-programmas" class="page hide">
-  <div class="card"><h2 style="margin-top:0">Programma's</h2>
-  <p class="mute">Komt in fase 5: schema's met starttijden en weekdagen, wachtrij, seizoensfactor en regenpauze.</p></div>
+  <div class="row" style="margin-top:10px"><h2 class="grow" style="margin:0">Programma's</h2><button class="p" id="new-prog" onclick="editProg(0)">Nieuw programma</button></div>
+  <form id="editor" class="card hide" onsubmit="saveProg(event)">
+    <h2 style="margin-top:0" id="ed-title">Nieuw programma</h2>
+    <label for="ed-name">Naam</label><input id="ed-name" class="w" maxlength="23" required placeholder="bijv. Gazon ochtend">
+    <label class="row" style="font-weight:400"><input type="checkbox" id="ed-enabled"> Actief (start automatisch)</label>
+    <label>Starttijden</label><div id="ed-starts" class="row"></div>
+    <button type="button" id="ed-add-start" onclick="addStart()" style="margin-top:6px">+ Starttijd</button>
+    <label>Wanneer</label>
+    <div class="seg" id="ed-kind"><button type="button" data-k="days">Weekdagen</button><button type="button" data-k="every">Elke N dagen</button></div>
+    <div id="ed-days" class="days" style="margin-top:8px"></div>
+    <div id="ed-every" class="row hide" style="margin-top:8px">Elke <input id="ed-n" type="number" min="1" max="30" value="2"> dagen, vanaf <input id="ed-from" type="date"></div>
+    <label>Stappen <small>(achter elkaar, met <span id="ed-pause">5</span> s pauze)</small></label>
+    <div id="ed-steps" class="steps"></div>
+    <button type="button" id="ed-add-step" onclick="addStep()">+ Stap</button>
+    <div class="row" style="margin-top:14px"><button class="p">Opslaan</button><button type="button" onclick="closeEditor()">Annuleren</button>
+    <span class="grow"></span><button type="button" class="d" id="ed-del" onclick="delProg()">Verwijderen</button></div>
+  </form>
+  <div id="progs"></div>
+  <p class="mute"><small>Looptijden worden geschaald met de seizoensfactor en de factor per zonetype (Instellingen).</small></p>
 </section>
 
 <section id="p-zones" class="page hide"><div id="zone-forms"></div></section>
 
 <section id="p-logboek" class="page hide">
-  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Live events</h2><button onclick="logItems=[];renderLog()">Wissen</button></div>
-  <p class="mute"><small>Alles wat er gebeurt sinds je deze pagina opende. Het opgeslagen logboek komt in fase 5.</small></p>
+  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Logboek</h2><button onclick="loadLog()">Vernieuwen</button></div>
+  <p class="mute"><small>Laatste 200 gebeurtenissen, nieuwste bovenaan. Ververst vanzelf.</small></p>
   <ul id="log" class="log"></ul></div>
 </section>
 
@@ -100,6 +141,15 @@ code.key{display:block;word-break:break-all;font-size:1.05em;padding:10px;backgr
     <small id="mc-warn" class="hide" style="display:block;color:var(--warn)">Let op: de 30 W-adapter is berekend op max 2 kleppen.</small>
     <label for="sg">Vertraging tussen inschakelen (ms)</label>
     <input id="sg" type="number" min="0" max="10000" step="100" required>
+    <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div>
+  </form>
+  <form class="card" onsubmit="saveFactors(event)">
+    <h2 style="margin-top:0">Looptijden</h2>
+    <p class="mute" style="margin:0"><small>Home Assistant stuurt de seizoensfactor later automatisch bij (weer).</small></p>
+    <label for="f-season">Seizoensfactor <b id="f-season-v"></b></label><input id="f-season" type="range" min="0" max="200" step="5">
+    <label for="f-gazon">Factor gazon <b id="f-gazon-v"></b></label><input id="f-gazon" type="range" min="0" max="200" step="5">
+    <label for="f-border">Factor border / heg <b id="f-border-v"></b></label><input id="f-border" type="range" min="0" max="200" step="5">
+    <label for="f-pause">Pauze tussen zones in een programma (s)</label><input id="f-pause" type="number" min="0" max="600">
     <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div>
   </form>
   <form class="card" onsubmit="changePw(event)">
@@ -116,7 +166,11 @@ code.key{display:block;word-break:break-all;font-size:1.05em;padding:10px;backgr
       <div class="row"><button onclick="copyKey()">Kopiëren</button><small class="mute">Wordt maar één keer getoond.</small></div></div>
     <div class="row" style="margin-top:12px"><button onclick="newKey()">Nieuwe API-key genereren</button></div>
   </div>
-  <div class="card"><h2 style="margin-top:0">MQTT en tijd</h2><p class="mute">Tijd/NTP komt in fase 5, MQTT en Home Assistant in fase 6.</p></div>
+  <form class="card" onsubmit="saveTz(event)"><h2 style="margin-top:0">Tijd</h2>
+    <p class="mute" id="tz-now" style="margin:0"></p>
+    <label for="tz">Tijdzone <small>(POSIX)</small></label><input id="tz" class="w" maxlength="47">
+    <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div></form>
+  <div class="card"><h2 style="margin-top:0">MQTT</h2><p class="mute">MQTT en Home Assistant komen in fase 6.</p></div>
 </section>
 
 <section id="p-systeem" class="page hide">
@@ -151,7 +205,7 @@ code.key{display:block;word-break:break-all;font-size:1.05em;padding:10px;backgr
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let status=null,zonesCfg=[],logItems=[],ws=null,wsRetry=1000,pollTimer=null,loggedIn=false;
+let status=null,zonesCfg=[],progs=[],ws=null,wsRetry=1000,pollTimer=null,loggedIn=false,editing=null;
 
 function toast(t){const m=$('#toast');m.textContent=t;m.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>m.style.display='none',4500)}
 async function api(path,method='GET',body){
@@ -174,7 +228,9 @@ function route(){if(!loggedIn)return;const key=location.hash.replace(/^#\/?/,'')
   document.querySelectorAll('.page').forEach(s=>s.classList.toggle('hide',s.id!='p-'+p));
   document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')=='#/'+key));
   const on=$('nav a.on');if(on)on.scrollIntoView({inline:'center',block:'nearest'});
-  if(p=='zones')loadZones();if(p=='instellingen')loadSettings();if(p=='systeem')loadInfo()}
+  if(p=='zones')loadZones();if(p=='instellingen')loadSettings();if(p=='systeem')loadInfo();
+  if(p=='programmas')loadProgs();if(p=='logboek')loadLog()}
+const page=()=>pages[location.hash.replace(/^#\/?/,'')]||'dashboard';
 window.addEventListener('hashchange',route);
 
 // ---------- dashboard ----------
@@ -182,7 +238,8 @@ function fmt(s){if(s>=3600)return Math.floor(s/3600)+' u '+String(Math.floor(s%3
   return s>=60?Math.floor(s/60)+':'+String(s%60).padStart(2,'0'):s+' s'}
 function renderStatus(){if(!status)return;
   $('#s-open').textContent=status.active+' / '+status.max_concurrent;
-  $('#s-mode').textContent=status.mode;$('#s-factor').textContent=status.factor+' %';
+  $('#s-factor').textContent=status.factor+' %';$('#s-time').textContent=status.time_valid?status.time.slice(11):'–';
+  renderMode();renderRuns();renderSkip();
   const el=$('#zones');
   if(el.children.length!=status.zones.length)el.innerHTML=status.zones.map(z=>`<div class="card zone" id="z${z.id}">
     <div class="row"><h3>${z.id}. <span class="n"></span></h3><span class="badge"></span></div>
@@ -202,9 +259,35 @@ async function openZ(id,timed){const body=timed?{duration_s:Math.max(1,Math.roun
   try{status.zones[id-1]=Object.assign(status.zones[id-1],await api('/zones/'+id+'/open','POST',body));renderStatus()}catch(_){}}
 async function closeZ(id){try{await api('/zones/'+id+'/close','POST')}catch(_){}}
 async function estop(){try{await api('/stop','POST');toast('Noodstop: alle kleppen dicht')}catch(_){}}
+const MODE_TXT={auto:'Programma\'s starten automatisch.',handmatig:'Programma\'s starten niet vanzelf; handbediening en "Start nu" werken wel.',
+  winter:'Alles geblokkeerd behalve de noodstop.',test:'Testcyclus loopt: elke ingeschakelde zone 1 minuut.'};
+function renderMode(){document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m==status.mode));
+  $('#mode-text').textContent=MODE_TXT[status.mode]||'';$('#test-btn').disabled=status.mode=='winter'||status.mode=='test'}
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=async()=>{
+  if(b.dataset.m=='winter'&&!confirm('Wintermodus: alle kleppen dicht en alles geblokkeerd. Doorgaan?'))return;
+  try{await api('/mode','PUT',{mode:b.dataset.m})}catch(_){}});
+function renderRuns(){const st={running:'loopt',pause:'pauze',waiting:'wacht op vrije klep'};
+  let h=status.runs.map(r=>`<div class="row" style="margin-top:8px"><b class="grow">${esc(r.name)}</b><span class="badge open">${st[r.state]}</span></div>
+    <div class="mute"><small>Stap ${r.step} van ${r.steps}${r.zone?' · '+esc(zn({zone:r.zone})):''}</small></div>
+    ${r.remaining_s!=null?`<div class="big">Nog ${fmt(r.remaining_s)}</div>`:''}`).join('');
+  if(status.queue.length)h+=`<p style="margin:8px 0 0"><small class="mute">Wachtrij:</small> ${status.queue.map(q=>esc(q.name)).join(', ')}</p>`;
+  $('#runs').innerHTML=h||'<p class="mute" style="margin:8px 0 0">Er loopt geen programma.</p>';
+  const n=status.next_run;$('#next-run').innerHTML=n?`Volgende: <b>${esc(n.name)}</b> · ${dayLabel(n.at)}`:(status.time_valid?'Geen geplande runs.':'Klok nog niet gezet – schema\'s wachten op NTP.')}
+function dayLabel(at){const d=new Date(at.replace(' ','T')),t=new Date();const diff=Math.round((new Date(d.toDateString())-new Date(t.toDateString()))/864e5);
+  return (diff==0?'vandaag':diff==1?'morgen':d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'short'}))+' '+at.slice(11)}
+function renderSkip(){const k=status.skip,on=k.active||k.next;
+  $('#skip-badge').textContent=k.active?'actief':k.next?'volgende run':'uit';$('#skip-badge').className='badge'+(on?' pending':'');
+  $('#skip-text').textContent=k.active?`Tot ${dayLabel(k.until)}${k.reason?' – '+k.reason:''}.`:k.next?`De volgende geplande run wordt overgeslagen${k.reason?' – '+k.reason:''}.`:'Geplande runs gaan gewoon door.';
+  $('#skip-off').disabled=!on}
+async function skipHours(h){try{await api('/skip','POST',{hours:h,reason:h?'handmatig via web':''});toast(h?'Overslaan '+h+' uur':'Regenpauze opgeheven')}catch(_){}}
+async function skipNextRun(){try{await api('/skip','POST',{next:true,reason:'handmatig via web'});toast('Volgende run wordt overgeslagen')}catch(_){}}
+async function testCycle(){if(!confirm('Testcyclus: elke ingeschakelde zone 1 minuut, achter elkaar. Starten?'))return;
+  try{await api('/test','POST');toast('Testcyclus gestart')}catch(_){}}
+
 // lokaal aftellen tussen status-pushes
 setInterval(()=>{if(!status)return;let any=false;
-  for(const z of status.zones)if(z.state=='open'&&z.remaining_s>0){z.remaining_s--;any=true}if(any)renderStatus()},1000);
+  for(const z of status.zones)if(z.state=='open'&&z.remaining_s>0){z.remaining_s--;any=true}
+  for(const r of status.runs)if(r.remaining_s>0){r.remaining_s--;any=true}if(any)renderStatus()},1000);
 
 // ---------- live (WebSocket) ----------
 function setConn(on){$('#conn').innerHTML=`<span class="dot${on?' on':''}"></span> <small>${on?'live':'offline'}</small>`}
@@ -217,19 +300,89 @@ function connect(){if(ws)return;ws=new WebSocket((location.protocol=='https:'?'w
 async function poll(){try{status=await api('/status');renderStatus()}catch(_){}}
 
 const zn=d=>{const z=status&&status.zones[d.zone-1];return z?z.name:'Zone '+d.zone};
-const why={timer:'tijd om',max_looptijd:'max looptijd',handmatig:'handmatig',noodstop:'noodstop',uitgeschakeld:'uitgeschakeld',ota:'update',herstart:'herstart'};
+const pn=id=>id==0?'Testcyclus':((progs.find(p=>p.id==id)||{}).name||'Programma '+id);
+const why={timer:'tijd om',max_looptijd:'max looptijd',handmatig:'handmatig',noodstop:'noodstop',uitgeschakeld:'uitgeschakeld',ota:'update',herstart:'herstart',
+  klaar:'klaar',afgebroken:'afgebroken',winter:'wintermodus',regenpauze:'regenpauze',overgeslagen:'overgeslagen',loopt_al:'liep al',limiet:'te veel kleppen open',ongeldige_zone:'onbekende zone'};
+const W=r=>why[r]||r||'';
 function describe(t,d){switch(t){
   case 'zone_opened':return `${zn(d)} open${d.onbepaald?' (onbepaald, max '+fmt(d.duur_s)+')':' voor '+fmt(d.duur_s)} · ${d.bron}`;
-  case 'zone_closed':return `${zn(d)} dicht na ${fmt(d.duur_s)} · ${why[d.reden]||d.reden}`;
-  case 'command_rejected':return `Geweigerd: ${zn(d)} – ${{limiet:'te veel kleppen open',uitgeschakeld:'zone uitgeschakeld',ongeldige_zone:'onbekende zone'}[d.reden]||d.reden}`;
+  case 'zone_closed':return `${zn(d)} dicht na ${fmt(d.duur_s)} · ${W(d.reden)}`;
+  case 'command_rejected':return `Geweigerd: ${zn(d)} – ${W(d.reden)}`;
   case 'max_runtime_reached':return `${zn(d)}: max looptijd bereikt`;
   case 'emergency_stop':return `NOODSTOP · ${d.bron}`;
+  case 'program_started':return `${d.naam} gestart · ${d.bron}`;
+  case 'program_finished':return `${d.naam} ${d.reden=='klaar'?'klaar':'gestopt ('+W(d.reden)+')'} na ${fmt(d.duur_s)}`;
+  case 'program_skipped':return `${d.naam} overgeslagen – ${W(d.reden)}`;
+  case 'mode_changed':return `Modus: ${d.modus}`;
   case 'update_started':return `Update gestart (${d.type})`;case 'update_finished':return 'Update klaar, herstarten';
   case 'update_failed':return `Update mislukt: ${d.fout}`;case 'wifi_fallback_ap':return 'Fallback-AP aan';
-  default:return t+' '+JSON.stringify(d)}}
-function onEvent(t,d){logItems.unshift({t:new Date(),text:describe(t,d)});logItems.length=Math.min(logItems.length,100);renderLog();
-  if(t=='command_rejected'||t=='max_runtime_reached'||t=='emergency_stop')toast(describe(t,d))}
-function renderLog(){$('#log').innerHTML=logItems.length?logItems.map(i=>`<li><time>${i.t.toLocaleTimeString('nl-NL')}</time>${esc(i.text)}</li>`).join(''):'<li class="mute">Nog geen events.</li>'}
+  default:return null}}
+function onEvent(t,d){
+  if(['command_rejected','max_runtime_reached','emergency_stop','program_skipped'].includes(t)){const m=describe(t,d);if(m)toast(m)}
+  if(page()=='logboek'){clearTimeout(onEvent.t);onEvent.t=setTimeout(loadLog,600)}
+  if(page()=='programmas'&&t.startsWith('program_')&&editing===null){clearTimeout(onEvent.p);onEvent.p=setTimeout(loadProgs,600)}}
+// logboekregel (API) -> tekst
+function logText(e){const z=e.zone?zn(e):'',p=e.program!=null?pn(e.program):'',d=e.duration_s||0;switch(e.action){
+  case 'boot':return 'Opgestart'+(d?' – kleppen stonden open bij reboot':'');
+  case 'zone_opened':return `${z} open voor ${fmt(d)} · ${e.source}`;
+  case 'zone_closed':return `${z} dicht na ${fmt(d)} · ${W(e.reason)}`;
+  case 'command_rejected':return `Geweigerd: ${z} – ${W(e.reason)} · ${e.source}`;
+  case 'max_runtime_reached':return `${z}: max looptijd bereikt`;
+  case 'emergency_stop':return `NOODSTOP · ${e.source}`;
+  case 'program_started':return `${p} gestart · ${e.source}`;
+  case 'program_finished':return `${p} ${e.reason=='klaar'?'klaar':'gestopt ('+W(e.reason)+')'} na ${fmt(d)}`;
+  case 'program_skipped':return `${p} overgeslagen – ${W(e.reason)}`;
+  case 'mode_changed':return `Modus → ${e.reason} · ${e.source}`;
+  case 'skip_set':return e.reason=='opgeheven'?'Regenpauze opgeheven':e.reason=='overgeslagen'?'Volgende run overslaan':`Regenpauze ${Math.round(d/3600)} uur · ${e.source}`;
+  default:return e.action}}
+async function loadLog(){let rows;try{rows=await api('/log?limit=200')}catch(_){return}
+  if(!progs.length)try{progs=await api('/programs')}catch(_){}
+  $('#log').innerHTML=rows.length?rows.map(e=>`<li><time>${e.time?e.time.slice(8,10)+'-'+e.time.slice(5,7)+' '+e.time.slice(11,16):'–'}</time>${esc(logText(e))}</li>`).join(''):'<li class="mute">Nog niets gelogd.</li>'}
+
+// ---------- programma's ----------
+const DAYS=['ma','di','wo','do','vr','za','zo'];
+function schedText(p){const when=p.every_days?(p.every_days==1?'Elke dag':`Elke ${p.every_days} dagen`):
+  (p.days.length==7?'Elke dag':p.days.join(' '));return when+' om '+p.starts.join(', ')}
+async function loadProgs(){try{progs=await api('/programs')}catch(_){return}
+  $('#new-prog').disabled=progs.length>=8;
+  $('#progs').innerHTML=progs.length?progs.map(p=>`<div class="card prog${p.enabled?'':' off'}">
+    <div class="row"><h3>${esc(p.name)}</h3>${p.running?'<span class="badge open">loopt</span>':p.enabled?'':'<span class="badge">uit</span>'}</div>
+    <dl class="kv"><dt>Wanneer</dt><dd>${schedText(p)}</dd>
+    <dt>Stappen</dt><dd>${p.steps.map(s=>esc(zn(s))+' '+fmt(s.duration_s)).join(' → ')||'<span class="mute">geen</span>'}</dd>
+    <dt>Totaal</dt><dd>${fmt(p.total_s)} <small>(met factor)</small></dd>
+    <dt>Volgende</dt><dd>${p.next_run?dayLabel(p.next_run):'<span class="mute">–</span>'}</dd></dl>
+    <div class="row"><button class="p" onclick="runProg(${p.id})"${p.steps.length?'':' disabled'}>Start nu</button><button onclick="editProg(${p.id})">Bewerken</button></div></div>`).join('')
+    :'<div class="card mute">Nog geen programma\'s. Maak er een met "Nieuw programma".</div>'}
+async function runProg(id){try{await api('/programs/'+id+'/run','POST');toast('Gestart (of in wachtrij)')}catch(_){}}
+function zoneOptions(sel){return (status?status.zones:[]).map(z=>`<option value="${z.id}"${z.id==sel?' selected':''}>${z.id}. ${esc(z.name)}</option>`).join('')}
+function startRow(v){const d=document.createElement('span');d.className='row';d.innerHTML=`<input type="time" required value="${v||'06:00'}"><button type="button" title="Verwijderen" onclick="this.parentNode.remove();edUi()">×</button>`;$('#ed-starts').appendChild(d);edUi()}
+function stepRow(s){const d=document.createElement('div');d.className='row';
+  d.innerHTML=`<select>${zoneOptions(s?s.zone:1)}</select><input type="number" min="1" max="240" required value="${s?Math.round(s.duration_s/60):10}"><span class="mute">min</span><button type="button" title="Verwijderen" onclick="this.parentNode.remove();edUi()">×</button>`;
+  $('#ed-steps').appendChild(d);edUi()}
+const addStart=()=>startRow('20:00'),addStep=()=>stepRow();
+function edUi(){$('#ed-add-start').disabled=$('#ed-starts').children.length>=4;$('#ed-add-step').disabled=$('#ed-steps').children.length>=10}
+function setKind(k){document.querySelectorAll('#ed-kind button').forEach(b=>b.classList.toggle('on',b.dataset.k==k));
+  $('#ed-days').classList.toggle('hide',k!='days');$('#ed-every').classList.toggle('hide',k!='every')}
+document.querySelectorAll('#ed-kind button').forEach(b=>b.onclick=()=>setKind(b.dataset.k));
+async function editProg(id){const p=id?progs.find(x=>x.id==id):{name:'',enabled:true,starts:['06:00'],days:DAYS,every_days:0,steps:[]};
+  editing=id;$('#ed-title').textContent=id?'Bewerken: '+p.name:'Nieuw programma';$('#ed-del').classList.toggle('hide',!id);
+  $('#ed-name').value=p.name;$('#ed-enabled').checked=p.enabled;
+  $('#ed-starts').innerHTML='';p.starts.forEach(startRow);
+  $('#ed-days').innerHTML=DAYS.map(d=>`<label><input type="checkbox" value="${d}"${p.days.includes(d)?' checked':''}><span>${d}</span></label>`).join('');
+  $('#ed-n').value=p.every_days||2;$('#ed-from').value=p.from||new Date().toISOString().slice(0,10);setKind(p.every_days?'every':'days');
+  $('#ed-steps').innerHTML='';p.steps.forEach(stepRow);if(!p.steps.length)stepRow();
+  try{$('#ed-pause').textContent=(await api('/settings')).zone_pause_s}catch(_){}
+  $('#editor').classList.remove('hide');$('#editor').scrollIntoView({behavior:'smooth'})}
+function closeEditor(){editing=null;$('#editor').classList.add('hide')}
+async function saveProg(e){e.preventDefault();const every=$('#ed-every').classList.contains('hide')?0:+$('#ed-n').value;
+  const body={name:$('#ed-name').value.trim(),enabled:$('#ed-enabled').checked,
+    starts:[...$('#ed-starts').querySelectorAll('input')].map(i=>i.value),
+    days:[...$('#ed-days').querySelectorAll('input:checked')].map(i=>i.value),every_days:every,
+    steps:[...$('#ed-steps').children].map(r=>({zone:+r.querySelector('select').value,duration_s:Math.round(r.querySelector('input').value*60)}))};
+  if(every)body.from=$('#ed-from').value;
+  try{await api(editing?'/programs/'+editing:'/programs',editing?'PUT':'POST',body);toast('Programma opgeslagen');closeEditor();loadProgs()}catch(_){}}
+async function delProg(){if(!confirm('Programma verwijderen?'))return;
+  try{await api('/programs/'+editing,'DELETE');toast('Verwijderd');closeEditor();loadProgs()}catch(_){}}
 
 // ---------- zones ----------
 async function loadZones(){try{zonesCfg=await api('/zones')}catch(_){return}
@@ -240,6 +393,7 @@ async function loadZones(){try{zonesCfg=await api('/zones')}catch(_){return}
     <div><label for="zd${z.id}">Standaardduur</label><input id="zd${z.id}" type="number" min="1" max="240" value="${Math.round(z.default_duration_s/60)}"> <span class="mute">min</span></div>
     <div><label for="zm${z.id}">Max looptijd</label><input id="zm${z.id}" type="number" min="1" max="240" value="${Math.round(z.max_runtime_s/60)}"> <span class="mute">min</span></div></div>
     <label class="row" style="font-weight:400"><input id="ze${z.id}" type="checkbox"${z.enabled?' checked':''}> Ingeschakeld</label>
+    <p class="mute" style="margin:4px 0"><small>Gelopen: deze week ${fmt(z.runtime.week_s)} · dit seizoen ${fmt(z.runtime.season_s)} · totaal ${fmt(z.runtime.total_s)}</small></p>
     <div class="row" style="margin-top:8px"><button class="p">Opslaan</button></div></form>`).join('')}
 async function saveZone(e,id){e.preventDefault();
   const body={name:$('#zn'+id).value.trim(),type:$('#zt'+id).value,enabled:$('#ze'+id).checked,
@@ -247,7 +401,14 @@ async function saveZone(e,id){e.preventDefault();
   try{await api('/zones/'+id,'PUT',body);toast('Zone '+id+' opgeslagen')}catch(_){}}
 
 // ---------- instellingen ----------
+function slider(id,v){const el=$('#'+id);if(v!=null)el.value=v;$('#'+id+'-v').textContent=el.value+' %'}
+['f-season','f-gazon','f-border'].forEach(id=>$('#'+id).addEventListener('input',()=>slider(id)));
+async function saveFactors(e){e.preventDefault();try{await api('/settings','PUT',{season_factor:+$('#f-season').value,
+  factor_gazon:+$('#f-gazon').value,factor_border:+$('#f-border').value,zone_pause_s:+$('#f-pause').value});toast('Opgeslagen')}catch(_){}}
+async function saveTz(e){e.preventDefault();try{await api('/settings','PUT',{timezone:$('#tz').value.trim()});toast('Tijdzone opgeslagen')}catch(_){}}
 async function loadSettings(){try{const s=await api('/settings');$('#mc').value=s.max_concurrent;$('#sg').value=s.stagger_ms;
+  slider('f-season',s.season_factor);slider('f-gazon',s.factor_gazon);slider('f-border',s.factor_border);$('#f-pause').value=s.zone_pause_s;
+  $('#tz').value=s.timezone;$('#tz-now').textContent=status&&status.time_valid?'Nu: '+status.time+' (via NTP)':'Klok nog niet gezet – wacht op NTP (internet nodig).';
   $('#pw-warn').classList.toggle('hide',!s.password_default);mcWarn();
   $('#key-state').innerHTML='Voor Home Assistant en scripts: header <code>X-API-Key</code>. '+(s.api_key_default?'Nu actief: de key uit <code>secrets.h</code>.':'Er is een eigen key ingesteld.')}catch(_){}}
 function mcWarn(){$('#mc-warn').classList.toggle('hide',!($('#mc').value>2))}
@@ -264,7 +425,7 @@ function copyKey(){navigator.clipboard.writeText($('#key-val').textContent).then
 // ---------- systeem ----------
 async function loadInfo(){try{const i=await api('/info');const up=i.uptime_s;
   const rows=[['Firmware','v'+i.version],['IP-adres',i.ip],['Hostname',i.hostname+'.local'],['WiFi-signaal',i.rssi+' dBm'],
-    ['Uptime',Math.floor(up/86400)+' d '+Math.floor(up%86400/3600)+' u '+Math.floor(up%3600/60)+' min'],
+    ['Tijd',status&&status.time_valid?status.time:'nog niet gezet (NTP)'],['Uptime',Math.floor(up/86400)+' d '+Math.floor(up%86400/3600)+' u '+Math.floor(up%3600/60)+' min'],
     ['Vrij geheugen',(i.heap_free/1024).toFixed(1)+' KB (fragmentatie '+i.heap_frag+' %)'],['Laatste herstart',i.reset_reason],['Chip-id',i.chip_id]];
   $('#info').innerHTML=rows.map(r=>`<tr><td class="k">${r[0]}</td><td>${esc(r[1])}</td></tr>`).join('')}catch(_){}}
 async function restore(inp){const f=inp.files[0];inp.value='';if(!f)return;let body;
@@ -276,7 +437,8 @@ async function reboot(){if(!confirm('sqwrtr herstarten? Alle kleppen gaan dicht.
 
 // ---------- start ----------
 async function start(){try{status=await api('/status')}catch(_){return}
-  loggedIn=true;$('#login').classList.add('hide');$('#nav').classList.remove('hide');renderStatus();renderLog();route();connect()}
+  loggedIn=true;$('#login').classList.add('hide');$('#nav').classList.remove('hide');renderStatus();route();connect();
+  api('/programs').then(p=>progs=p).catch(()=>{})}
 start();
 </script>
 </body>

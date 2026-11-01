@@ -4,6 +4,8 @@
 #include "config.h"
 #include "secrets.h"
 #include "log.h"
+#include "ntp.h"
+#include "programs.h"
 
 namespace storage {
 
@@ -136,8 +138,10 @@ void exportBackup(JsonDocument& doc) {
     JsonObject s = doc["settings"].to<JsonObject>();
     s["max_concurrent"] = zones::settings().maxConcurrent;
     s["stagger_ms"] = zones::settings().staggerMs;
+    s["timezone"] = ntp::timezone();
     JsonArray arr = doc["zones"].to<JsonArray>();
     for (uint8_t i = 0; i < ZONE_COUNT; i++) zoneToJson(arr.add<JsonObject>(), zones::config(i));
+    programs::exportConfig(doc.as<JsonObject>());
 }
 
 // Valideert alles eerst; past pas toe als het geheel geldig is.
@@ -152,8 +156,14 @@ static bool applyConfig(JsonObjectConst in, const char** err) {
         if (!arr[i].is<JsonObjectConst>() || !zoneFromJson(arr[i], cfgs[i], err)) return false;
     }
 
+    const char* tz = in["settings"]["timezone"] | "";
+    if (tz[0] && (strlen(tz) < 3 || strlen(tz) > 47)) return *err = "timezone: 3-47 tekens", false;
+
+    // Zones eerst: programma-validatie kijkt niet naar zones, maar wel naar ZONE_COUNT.
+    if (!programs::importConfig(in, err)) return false;
     zones::settings() = settings;
     for (uint8_t i = 0; i < ZONE_COUNT; i++) zones::config(i) = cfgs[i];
+    if (tz[0]) ntp::setTimezone(tz);
     return true;
 }
 
@@ -232,11 +242,14 @@ void markDirty() {
     dirtyAt = millis();
 }
 
+void flush() {
+    if (!dirty) return;
+    dirty = false;
+    save();
+}
+
 void loop() {
-    if (dirty && millis() - dirtyAt >= SAVE_DELAY_MS) {
-        dirty = false;
-        save();
-    }
+    if (dirty && millis() - dirtyAt >= SAVE_DELAY_MS) flush();
 }
 
 }  // namespace storage

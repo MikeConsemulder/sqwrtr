@@ -1,4 +1,4 @@
-// sqwrtr – fase 4: web-UI + opgeslagen instellingen
+// sqwrtr – fase 5: programma's, NTP, wachtrij, factor, overslaan, logboek
 // Veilige pin-init, WiFi + fallback-AP, mDNS, ArduinoOTA, zone-manager met
 // veiligheidsregels, FLASH-knop, status-LED, serieel testconsole en webserver.
 
@@ -9,6 +9,9 @@
 #include "relays.h"
 #include "zones.h"
 #include "storage.h"
+#include "programs.h"
+#include "history.h"
+#include "ntp.h"
 #include "net.h"
 #include "web.h"
 #include "button.h"
@@ -51,10 +54,20 @@ void setup() {
     ESP.wdtEnable(WDTO_8S);
 
     zones::begin();
-    storage::begin();  // overschrijft standaardwaarden met opgeslagen config
+    programs::begin();
+    storage::begin();  // overschrijft standaardwaarden met opgeslagen config (ook tijdzone)
+    history::begin();
+    history::add(history::Action::Boot, 0, 0, relays::previousMask(), (uint8_t)zones::Source::System, "");
+    ntp::begin();
     net::begin({
         []() { return zones::activeCount() == 0 && !web::updateInProgress(); },  // geen OTA met open kleppen
-        []() { zones::closeAll(zones::Source::System, "ota"); relays::allOff(); },
+        []() {
+            programs::abortAll("afgebroken");
+            zones::closeAll(zones::Source::System, "ota");
+            relays::allOff();
+            storage::flush();
+            history::flush();
+        },
     });
     web::begin();
 }
@@ -63,7 +76,9 @@ void loop() {
     net::loop();
     web::loop();
     zones::loop();
+    programs::loop();
     storage::loop();
+    history::loop();
     button::loop();
     console::loop();
 
