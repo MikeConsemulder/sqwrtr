@@ -3,7 +3,7 @@
 
 namespace relays {
 
-// Overleeft een (watchdog-)reset, niet een stroomonderbreking.
+// Survives a (watchdog) reset, not a power loss.
 struct RtcState {
     uint32_t magic;
     uint32_t mask;
@@ -14,7 +14,7 @@ static uint8_t current = 0;
 static uint8_t previous = 0;
 
 static void setupOff(uint8_t pin) {
-    digitalWrite(pin, HIGH);  // active LOW → HIGH = uit
+    digitalWrite(pin, HIGH);  // active LOW → HIGH = off
     pinMode(pin, OUTPUT);
 }
 

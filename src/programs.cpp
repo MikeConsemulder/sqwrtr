@@ -20,38 +20,40 @@ static char skipReason[48] = "";
 enum class Phase : uint8_t { Queued, Waiting, Watering, Pause };
 struct Run {
     bool used;
-    uint8_t program;  // 1-based; 0 = testcyclus
+    uint8_t program;  // 1-based; 0 = test cycle
     Phase phase;
     uint8_t step;
     uint8_t zone;
     zones::Source src;
     uint32_t seq;
-    uint32_t phaseAt;    // millis() begin huidige fase
-    uint32_t startedAt;  // millis() begin run (na wachtrij)
+    uint32_t phaseAt;    // millis() at start of current phase
+    uint32_t startedAt;  // millis() at start of run (after the queue)
 };
 static Run runs[MAX_RUNS];
 static uint32_t nextSeq = 0;
 static uint32_t queueSig = 0;
 static int32_t lastMinuteKey = -1;
 
-static const char* const DAY_NAMES[] = {"ma", "di", "wo", "do", "vr", "za", "zo"};
+static const char* const DAY_NAMES[] = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"};
+// Legacy (Dutch) aliases, accepted on input only so older config.json files keep loading.
+static const char* const LEGACY_DAY_NAMES[] = {"ma", "di", "wo", "do", "vr", "za", "zo"};
 
-// ---------- hulpfuncties ----------
+// ---------- helpers ----------
 
 static const char* progName(uint8_t id) {
-    if (id == 0) return "Testcyclus";
+    if (id == 0) return "Test cycle";
     return (id <= MAX_PROGRAMS && progs[id - 1].used) ? progs[id - 1].name : "?";
 }
 
 static uint32_t scaledDuration(uint8_t zone, uint16_t base) {
     const uint8_t typeFactor =
-        zones::config(zone).type == zones::Type::Border ? cfg.factorBorder : cfg.factorGazon;
+        zones::config(zone).type == zones::Type::Border ? cfg.factorBorder : cfg.factorLawn;
     return (uint32_t)base * cfg.seasonFactor * typeFactor / 10000;
 }
 
-// Stap idx van een run: zone + (geschaalde) duur. false = geen stap meer.
+// Step idx of a run: zone + (scaled) duration. false = no more steps.
 static bool stepAt(const Run& r, uint8_t idx, uint8_t& zone, uint32_t& dur) {
-    if (r.program == 0) {  // testcyclus: elke ingeschakelde zone TEST_STEP_S, zonder factor
+    if (r.program == 0) {  // test cycle: every enabled zone TEST_STEP_S, without factor
         uint8_t n = 0;
         for (uint8_t z = 0; z < ZONE_COUNT; z++) {
             if (!zones::config(z).enabled) continue;
@@ -89,7 +91,7 @@ static Run* freeRun() {
 }
 
 static void skipped(uint8_t id, const char* reason, zones::Source src) {
-    events::emit("program_skipped", "{\"program\":%u,\"naam\":\"%s\",\"reden\":\"%s\"}", id, progName(id), reason);
+    events::emit("program_skipped", "{\"program\":%u,\"name\":\"%s\",\"reason\":\"%s\"}", id, progName(id), reason);
     history::add(history::Action::ProgramSkipped, 0, id, 0, (uint8_t)src, reason);
 }
 
@@ -97,7 +99,7 @@ static void finish(Run& r, const char* reason) {
     if (r.phase == Phase::Watering) zones::close(r.zone, zones::Source::System, reason);
     if (r.phase != Phase::Queued) {
         const uint32_t secs = (millis() - r.startedAt) / 1000;
-        events::emit("program_finished", "{\"program\":%u,\"naam\":\"%s\",\"duur_s\":%lu,\"reden\":\"%s\"}",
+        events::emit("program_finished", "{\"program\":%u,\"name\":\"%s\",\"duration_s\":%lu,\"reason\":\"%s\"}",
                      r.program, progName(r.program), (unsigned long)secs, reason);
         history::add(history::Action::ProgramFinished, 0, r.program ? r.program : history::PROGRAM_TEST, secs, (uint8_t)r.src, reason);
     }
@@ -121,17 +123,17 @@ static RunResult enqueue(uint8_t id, zones::Source src) {
 // ---------- scheduler ----------
 
 static void trigger(uint8_t id) {
-    if (currentMode == Mode::Manual) return skipped(id, "handmatig", zones::Source::Schema);
-    if (currentMode == Mode::Winter) return skipped(id, "winter", zones::Source::Schema);
-    if (skipActive()) return skipped(id, "regenpauze", zones::Source::Schema);
+    if (currentMode == Mode::Manual) return skipped(id, "manual", zones::Source::Schedule);
+    if (currentMode == Mode::Winter) return skipped(id, "winter", zones::Source::Schedule);
+    if (skipActive()) return skipped(id, "rain_delay", zones::Source::Schedule);
     if (skipNext) {
         skipNext = false;
         storage::markDirty();
-        return skipped(id, "overgeslagen", zones::Source::Schema);
+        return skipped(id, "skipped", zones::Source::Schedule);
     }
-    RunResult r = enqueue(id, zones::Source::Schema);
-    if (r == RunResult::AlreadyRunning) skipped(id, "loopt_al", zones::Source::Schema);
-    else if (r != RunResult::Ok) skipped(id, "afgebroken", zones::Source::Schema);
+    RunResult r = enqueue(id, zones::Source::Schedule);
+    if (r == RunResult::AlreadyRunning) skipped(id, "already_running", zones::Source::Schedule);
+    else if (r != RunResult::Ok) skipped(id, "aborted", zones::Source::Schedule);
 }
 
 static void schedulerTick() {
@@ -139,8 +141,8 @@ static void schedulerTick() {
     if (!ntp::localNow(lt)) return;
     const int32_t key = lt.tm_yday * 1440 + lt.tm_hour * 60 + lt.tm_min;
     if (key == lastMinuteKey) return;
-    // Eerste geldige minuut na boot niet starten: na een (watchdog-)reboot binnen
-    // dezelfde minuut zou een run anders dubbel starten.
+    // Don't start in the first valid minute after boot: after a (watchdog) reboot within
+    // the same minute a run would otherwise start twice.
     const bool first = lastMinuteKey < 0;
     lastMinuteKey = key;
     if (first) return;
@@ -167,7 +169,7 @@ static void runnerTick() {
     uint8_t active = 0;
     for (const Run& r : runs) active += r.used && r.phase != Phase::Queued;
 
-    // Wachtrij → actief, oudste eerst
+    // Queue → active, oldest first
     while (active < maxRuns) {
         Run* next = nullptr;
         for (Run& r : runs) {
@@ -178,7 +180,7 @@ static void runnerTick() {
         next->startedAt = now;
         next->step = 0;
         active++;
-        events::emit("program_started", "{\"program\":%u,\"naam\":\"%s\",\"bron\":\"%s\"}", next->program,
+        events::emit("program_started", "{\"program\":%u,\"name\":\"%s\",\"source\":\"%s\"}", next->program,
                      progName(next->program), zones::sourceName(next->src));
         history::add(history::Action::ProgramStarted, 0, next->program ? next->program : history::PROGRAM_TEST, 0, (uint8_t)next->src, "");
     }
@@ -192,15 +194,15 @@ static void runnerTick() {
                 break;
 
             case Phase::Waiting: {
-                // Stappen overslaan die niets doen (factor 0, zone uit)
+                // Skip steps that do nothing (factor 0, zone disabled)
                 while (stepAt(r, r.step, zone, dur) && (dur == 0 || !zones::config(zone).enabled)) r.step++;
                 if (!stepAt(r, r.step, zone, dur)) {
-                    finish(r, "klaar");
+                    finish(r, "done");
                     break;
                 }
-                if (zones::state(zone) != zones::State::Closed) break;            // zone bezet
-                if (zones::activeCount() >= zones::settings().maxConcurrent) break;  // geen plek
-                zones::Result res = zones::open(zone, dur, zones::Source::Schema);
+                if (zones::state(zone) != zones::State::Closed) break;            // zone busy
+                if (zones::activeCount() >= zones::settings().maxConcurrent) break;  // no slot
+                zones::Result res = zones::open(zone, dur, zones::Source::Schedule);
                 if (res == zones::Result::Ok) {
                     r.phase = Phase::Watering;
                     r.zone = zone;
@@ -215,7 +217,7 @@ static void runnerTick() {
                 if (zones::state(r.zone) != zones::State::Closed) break;
                 r.step++;
                 if (!stepAt(r, r.step, zone, dur)) {
-                    finish(r, "klaar");
+                    finish(r, "done");
                 } else {
                     r.phase = Phase::Pause;
                     r.phaseAt = now;
@@ -228,7 +230,7 @@ static void runnerTick() {
         }
     }
 
-    // Wachtrij gewijzigd? (handtekening van programma-id's in wachtrij)
+    // Queue changed? (signature of the program IDs in the queue)
     uint32_t sig = 0;
     for (const Run& r : runs) {
         if (r.used && r.phase == Phase::Queued) sig = sig * 31 + r.program + 1;
@@ -240,16 +242,16 @@ static void runnerTick() {
         for (const Run& r : runs) {
             if (r.used && r.phase == Phase::Queued) n += snprintf(list + n, sizeof(list) - n, "%s%u", n ? "," : "", r.program);
         }
-        events::emit("queue_changed", "{\"wachtrij\":[%s]}", list);
+        events::emit("queue_changed", "{\"queue\":[%s]}", list);
     }
 }
 
-// ---------- publieke API ----------
+// ---------- public API ----------
 
 void begin() {
     for (Program& p : progs) p = Program{};
     for (Run& r : runs) r = Run{};
-    zones::setStopHook([]() { abortAll("noodstop"); });
+    zones::setStopHook([]() { abortAll("emergency_stop"); });
 }
 
 void loop() {
@@ -262,19 +264,20 @@ Mode mode() { return currentMode; }
 const char* modeName() {
     if (findRun(0)) return "test";
     switch (currentMode) {
-        case Mode::Manual: return "handmatig";
+        case Mode::Manual: return "manual";
         case Mode::Winter: return "winter";
         default: return "auto";
     }
 }
 
 static const char* plainModeName(Mode m) {
-    return m == Mode::Manual ? "handmatig" : m == Mode::Winter ? "winter" : "auto";
+    return m == Mode::Manual ? "manual" : m == Mode::Winter ? "winter" : "auto";
 }
 
 bool parseMode(const char* s, Mode& out) {
     if (!strcmp(s, "auto")) out = Mode::Auto;
-    else if (!strcmp(s, "handmatig")) out = Mode::Manual;
+    // "handmatig" is the legacy (Dutch) alias for "manual", so older config.json files keep loading.
+    else if (!strcmp(s, "manual") || !strcmp(s, "handmatig")) out = Mode::Manual;
     else if (!strcmp(s, "winter")) out = Mode::Winter;
     else return false;
     return true;
@@ -289,7 +292,7 @@ void setMode(Mode m, zones::Source src) {
         abortAll("winter");
         zones::closeAll(src, "winter");
     }
-    events::emit("mode_changed", "{\"modus\":\"%s\",\"vorige\":\"%s\",\"bron\":\"%s\"}", plainModeName(m),
+    events::emit("mode_changed", "{\"mode\":\"%s\",\"previous\":\"%s\",\"source\":\"%s\"}", plainModeName(m),
                  plainModeName(prev), zones::sourceName(src));
     history::add(history::Action::ModeChanged, 0, 0, 0, (uint8_t)src, plainModeName(m));
     storage::markDirty();
@@ -303,12 +306,12 @@ RunResult runNow(uint8_t id, zones::Source src) {
 
 const char* runResultMessage(RunResult r) {
     switch (r) {
-        case RunResult::Ok: return "Gestart of in wachtrij";
-        case RunResult::NotFound: return "Onbekend programma";
-        case RunResult::Empty: return "Programma heeft geen stappen";
-        case RunResult::Winter: return "Wintermodus: alles geblokkeerd";
-        case RunResult::AlreadyRunning: return "Programma loopt al of staat in de wachtrij";
-        case RunResult::Full: return "Wachtrij vol";
+        case RunResult::Ok: return "Started or queued";
+        case RunResult::NotFound: return "Unknown program";
+        case RunResult::Empty: return "Program has no steps";
+        case RunResult::Winter: return "Winter mode: everything blocked";
+        case RunResult::AlreadyRunning: return "Program is already running or queued";
+        case RunResult::Full: return "Queue full";
     }
     return "?";
 }
@@ -324,12 +327,12 @@ bool setSkipHours(uint32_t hours, const char* reason, zones::Source src) {
         skipUntil = 0;
         skipNext = false;
         skipReason[0] = '\0';
-        history::add(history::Action::SkipSet, 0, 0, 0, (uint8_t)src, "opgeheven");
+        history::add(history::Action::SkipSet, 0, 0, 0, (uint8_t)src, "cleared");
     } else {
         if (!ntp::valid()) return false;
         skipUntil = ntp::now() + (time_t)hours * 3600;
         strlcpy(skipReason, reason ? reason : "", sizeof(skipReason));
-        history::add(history::Action::SkipSet, 0, 0, hours * 3600, (uint8_t)src, "regenpauze");
+        history::add(history::Action::SkipSet, 0, 0, hours * 3600, (uint8_t)src, "rain_delay");
     }
     storage::markDirty();
     web::markStatusDirty();
@@ -339,12 +342,12 @@ bool setSkipHours(uint32_t hours, const char* reason, zones::Source src) {
 void setSkipNext(const char* reason, zones::Source src) {
     skipNext = true;
     strlcpy(skipReason, reason ? reason : "", sizeof(skipReason));
-    history::add(history::Action::SkipSet, 0, 0, 0, (uint8_t)src, "overgeslagen");
+    history::add(history::Action::SkipSet, 0, 0, 0, (uint8_t)src, "skipped");
     storage::markDirty();
     web::markStatusDirty();
 }
 
-// ---------- programma's: JSON ----------
+// ---------- programs: JSON ----------
 
 bool exists(uint8_t id) { return id >= 1 && id <= MAX_PROGRAMS && progs[id - 1].used; }
 
@@ -386,45 +389,46 @@ bool fromJson(JsonObjectConst in, Program& out, const char** err) {
     p.enabled = in["enabled"] | true;
 
     const char* name = in["name"] | "";
-    if (!name[0] || strlen(name) >= sizeof(p.name)) return *err = "Naam: 1-23 tekens", false;
+    if (!name[0] || strlen(name) >= sizeof(p.name)) return *err = "Name: 1-23 characters", false;
     strlcpy(p.name, name, sizeof(p.name));
 
     for (uint16_t& s : p.starts) s = NO_START;
     JsonArrayConst starts = in["starts"];
-    if (starts.size() < 1 || starts.size() > MAX_STARTS) return *err = "Starttijden: 1-4", false;
+    if (starts.size() < 1 || starts.size() > MAX_STARTS) return *err = "Start times: 1-4", false;
     for (uint8_t i = 0; i < starts.size(); i++) {
-        if (!parseHhmm(starts[i] | "", p.starts[i])) return *err = "Starttijd moet UU:MM zijn", false;
+        if (!parseHhmm(starts[i] | "", p.starts[i])) return *err = "Start time must be HH:MM", false;
     }
 
     p.everyDays = in["every_days"] | 0;
-    if (p.everyDays > 30) return *err = "Elke N dagen: 0-30", false;
+    if (p.everyDays > 30) return *err = "Every N days: 0-30", false;
     if (p.everyDays) {
         struct tm lt;
         p.anchorDay = ntp::localNow(lt) ? ntp::dayNumber(lt) : 0;
         if (!in["from"].isNull() && !parseDate(in["from"] | "", p.anchorDay)) {
-            return *err = "Startdatum moet JJJJ-MM-DD zijn", false;
+            return *err = "Start date must be YYYY-MM-DD", false;
         }
     } else {
         for (JsonVariantConst d : in["days"].as<JsonArrayConst>()) {
             bool found = false;
             for (uint8_t i = 0; i < 7; i++) {
-                if (!strcmp(d | "", DAY_NAMES[i])) {
+                const char* s = d | "";
+                if (!strcmp(s, DAY_NAMES[i]) || !strcmp(s, LEGACY_DAY_NAMES[i])) {
                     p.days |= 1 << i;
                     found = true;
                 }
             }
-            if (!found) return *err = "Dagen: ma, di, wo, do, vr, za, zo", false;
+            if (!found) return *err = "Days: mon, tue, wed, thu, fri, sat, sun", false;
         }
-        if (!p.days) return *err = "Kies minstens één dag (of elke N dagen)", false;
+        if (!p.days) return *err = "Pick at least one day (or every N days)", false;
     }
 
     JsonArrayConst steps = in["steps"];
-    if (steps.size() > MAX_STEPS) return *err = "Maximaal 10 stappen", false;
+    if (steps.size() > MAX_STEPS) return *err = "At most 10 steps", false;
     for (JsonObjectConst s : steps) {
         uint32_t zone = s["zone"] | 0u;
         uint32_t dur = s["duration_s"] | 0u;
-        if (zone < 1 || zone > ZONE_COUNT) return *err = "Stap: zone 1-5", false;
-        if (dur < 1 || dur > 4 * 3600) return *err = "Stap: duur 1 s – 4 uur", false;
+        if (zone < 1 || zone > ZONE_COUNT) return *err = "Step: zone 1-5", false;
+        if (dur < 1 || dur > 4 * 3600) return *err = "Step: duration 1 s – 4 h", false;
         p.steps[p.stepCount++] = {(uint8_t)(zone - 1), (uint16_t)dur};
     }
 
@@ -441,13 +445,13 @@ void store(uint8_t id, const Program& p) {
 
 void remove(uint8_t id) {
     if (!exists(id)) return;
-    if (Run* r = findRun(id)) finish(*r, "afgebroken");
+    if (Run* r = findRun(id)) finish(*r, "aborted");
     progs[id - 1] = Program{};
     storage::markDirty();
     web::markStatusDirty();
 }
 
-// Volgende geplande start (epoch) binnen 14 dagen; 0 als er geen is.
+// Next scheduled start (epoch) within 14 days; 0 if there is none.
 static time_t nextStart(const Program& p) {
     struct tm now;
     if (!p.used || !p.enabled || !p.stepCount || !ntp::localNow(now)) return 0;
@@ -455,7 +459,7 @@ static time_t nextStart(const Program& p) {
     for (uint8_t d = 0; d <= 14; d++) {
         struct tm day = now;
         day.tm_mday += d;
-        day.tm_hour = 12;  // normaliseren rond het middaguur (zomertijd-veilig)
+        day.tm_hour = 12;  // normalise around noon (DST-safe)
         day.tm_min = day.tm_sec = 0;
         day.tm_isdst = -1;
         mktime(&day);
@@ -500,7 +504,7 @@ static void programBody(JsonObject o, const Program& p, bool forStorage) {
         total += scaledDuration(p.steps[i].zone, p.steps[i].durationS);
     }
     if (forStorage) return;
-    o["total_s"] = total;  // met factoren
+    o["total_s"] = total;  // with factors
     time_t next = nextStart(p);
     if (next) {
         ntp::format(next, buf, sizeof(buf));
@@ -523,23 +527,25 @@ void listJson(JsonArray arr) {
     }
 }
 
-// ---------- instellingen + status ----------
+// ---------- settings + status ----------
 
 Settings& settings() { return cfg; }
 
 bool settingsFromJson(JsonObjectConst in, Settings& out, const char** err) {
     Settings next = out;
     struct Field { const char* key; uint8_t* dst; };
-    for (const Field& f : {Field{"season_factor", &next.seasonFactor}, Field{"factor_gazon", &next.factorGazon},
-                           Field{"factor_border", &next.factorBorder}}) {
+    // "factor_gazon" is the legacy (Dutch) alias for "factor_lawn", so older config.json files
+    // keep loading. It comes before "factor_lawn" so the new key wins when both are present.
+    for (const Field& f : {Field{"season_factor", &next.seasonFactor}, Field{"factor_gazon", &next.factorLawn},
+                           Field{"factor_lawn", &next.factorLawn}, Field{"factor_border", &next.factorBorder}}) {
         if (in[f.key].isNull()) continue;
         int v = in[f.key] | -1;
-        if (v < 0 || v > 200) return *err = "Factoren: 0-200 %", false;
+        if (v < 0 || v > 200) return *err = "Factors: 0-200 %", false;
         *f.dst = v;
     }
     if (!in["zone_pause_s"].isNull()) {
         int v = in["zone_pause_s"] | -1;
-        if (v < 0 || v > 600) return *err = "Pauze tussen zones: 0-600 s", false;
+        if (v < 0 || v > 600) return *err = "Pause between zones: 0-600 s", false;
         next.zonePauseS = v;
     }
     out = next;
@@ -548,7 +554,7 @@ bool settingsFromJson(JsonObjectConst in, Settings& out, const char** err) {
 
 void settingsToJson(JsonObject o) {
     o["season_factor"] = cfg.seasonFactor;
-    o["factor_gazon"] = cfg.factorGazon;
+    o["factor_lawn"] = cfg.factorLawn;
     o["factor_border"] = cfg.factorBorder;
     o["zone_pause_s"] = cfg.zonePauseS;
 }
@@ -557,7 +563,7 @@ void statusJson(JsonObject o) {
     char buf[24];
     o["mode"] = modeName();
     o["factor"] = cfg.seasonFactor;
-    o["factor_gazon"] = cfg.factorGazon;
+    o["factor_lawn"] = cfg.factorLawn;
     o["factor_border"] = cfg.factorBorder;
 
     o["time_valid"] = ntp::valid();
@@ -610,7 +616,7 @@ void statusJson(JsonObject o) {
         }
     }
 
-    // Eerstvolgende run over alle programma's
+    // Next upcoming run across all programs
     time_t best = 0;
     uint8_t bestId = 0;
     for (uint8_t i = 0; i < MAX_PROGRAMS; i++) {
@@ -631,7 +637,7 @@ void statusJson(JsonObject o) {
     }
 }
 
-// ---------- opslag ----------
+// ---------- persistence ----------
 
 void exportConfig(JsonObject root) {
     JsonObject s = root["schedule"].to<JsonObject>();
@@ -643,7 +649,7 @@ void exportConfig(JsonObject root) {
     JsonArray arr = root["programs"].to<JsonArray>();
     for (uint8_t i = 0; i < MAX_PROGRAMS; i++) {
         JsonObject o = arr.add<JsonObject>();
-        if (!progs[i].used) continue;  // lege plek = {}
+        if (!progs[i].used) continue;  // empty slot = {}
         programBody(o, progs[i], true);
     }
 }
@@ -654,10 +660,10 @@ bool importConfig(JsonObjectConst root, const char** err) {
     JsonObjectConst s = root["schedule"];
     if (!s.isNull()) {
         if (!settingsFromJson(s, next, err)) return false;
-        if (!s["mode"].isNull() && !parseMode(s["mode"] | "", m)) return *err = "Onbekende modus", false;
+        if (!s["mode"].isNull() && !parseMode(s["mode"] | "", m)) return *err = "Unknown mode", false;
     }
 
-    // Programma's eerst allemaal valideren (in een tijdelijke kopie op de heap)
+    // Validate all programs first (in a temporary copy on the heap)
     JsonArrayConst arr = root["programs"];
     std::unique_ptr<Program[]> parsed(new Program[MAX_PROGRAMS]());
     for (uint8_t i = 0; i < MAX_PROGRAMS && i < arr.size(); i++) {
@@ -668,7 +674,7 @@ bool importConfig(JsonObjectConst root, const char** err) {
 
     cfg = next;
     if (!arr.isNull()) {
-        abortAll("afgebroken");
+        abortAll("aborted");
         for (uint8_t i = 0; i < MAX_PROGRAMS; i++) progs[i] = parsed[i];
     }
     if (!s.isNull()) {

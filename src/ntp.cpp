@@ -11,7 +11,7 @@ static bool synced = false;
 void begin() {
     if (!tz[0]) strlcpy(tz, DEFAULT_TZ, sizeof(tz));
     settimeofday_cb([]() {
-        if (!synced) LOG("Tijd: gesynchroniseerd via NTP");
+        if (!synced) LOG("Time: synchronised via NTP");
         synced = true;
     });
     configTime(tz, NTP_SERVER_1, NTP_SERVER_2);

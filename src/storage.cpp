@@ -18,14 +18,14 @@ static bool mounted = false;
 static bool dirty = false;
 static uint32_t dirtyAt = 0;
 
-// SHA-256 als hex; leeg = standaardwaarde uit secrets.h.
+// SHA-256 as hex; empty = default value from secrets.h.
 static char adminHash[65] = "";
 static char apiKeyHash[65] = "";
 
 // ---------- hashing ----------
 
 static void sha256Hex(const char* value, char out[65]) {
-    // Gezouten met het chip-id: dezelfde waarde geeft per apparaat een andere hash.
+    // Salted with the chip ID: the same value gives a different hash on each device.
     char salt[16];
     snprintf(salt, sizeof(salt), "sqwrtr:%06x:", ESP.getChipId());
     uint8_t digest[32];
@@ -49,7 +49,7 @@ static bool checkAgainst(const char* value, const char* hash, const char* fallba
     sha256Hex(value, h);
     if (hash[0]) return hexEquals(h, hash);
     char f[65];
-    sha256Hex(fallback, f);  // ook de standaardwaarde via hash vergelijken (constante tijd)
+    sha256Hex(fallback, f);  // compare the default via its hash too (constant time)
     return hexEquals(h, f);
 }
 
@@ -73,7 +73,7 @@ String generateApiKey() {
 
 // ---------- JSON <-> config ----------
 
-static const char* typeName(zones::Type t) { return t == zones::Type::Border ? "border" : "gazon"; }
+static const char* typeName(zones::Type t) { return t == zones::Type::Border ? "border" : "lawn"; }
 
 void zoneToJson(JsonObject o, const zones::Config& c) {
     o["name"] = c.name;
@@ -87,17 +87,18 @@ bool zoneFromJson(JsonObjectConst in, zones::Config& out, const char** err) {
     zones::Config next = out;
     if (!in["name"].isNull()) {
         const char* n = in["name"] | "";
-        if (!n[0] || strlen(n) >= sizeof(next.name)) return *err = "name: 1-23 tekens", false;
+        if (!n[0] || strlen(n) >= sizeof(next.name)) return *err = "name: 1-23 characters", false;
         strlcpy(next.name, n, sizeof(next.name));
     }
     if (!in["type"].isNull()) {
         const char* t = in["type"] | "";
-        if (!strcmp(t, "gazon")) next.type = zones::Type::Gazon;
+        // "gazon" is the legacy (Dutch) alias for "lawn", so older config.json files keep loading.
+        if (!strcmp(t, "lawn") || !strcmp(t, "gazon")) next.type = zones::Type::Lawn;
         else if (!strcmp(t, "border")) next.type = zones::Type::Border;
-        else return *err = "type: gazon of border", false;
+        else return *err = "type: lawn or border", false;
     }
     if (!in["enabled"].isNull()) {
-        if (!in["enabled"].is<bool>()) return *err = "enabled: true of false", false;
+        if (!in["enabled"].is<bool>()) return *err = "enabled: true or false", false;
         next.enabled = in["enabled"];
     }
     if (!in["max_runtime_s"].isNull()) {
@@ -107,11 +108,11 @@ bool zoneFromJson(JsonObjectConst in, zones::Config& out, const char** err) {
     }
     if (!in["default_duration_s"].isNull()) {
         uint32_t v = in["default_duration_s"] | 0u;
-        if (v < 1) return *err = "default_duration_s: minimaal 1", false;
+        if (v < 1) return *err = "default_duration_s: at least 1", false;
         next.defaultDurationS = v;
     }
     if (next.defaultDurationS > next.maxRuntimeS) {
-        return *err = "Standaardduur mag niet langer zijn dan de max looptijd", false;
+        return *err = "Default duration must not exceed the max runtime", false;
     }
     out = next;
     return true;
@@ -144,7 +145,7 @@ void exportBackup(JsonDocument& doc) {
     programs::exportConfig(doc.as<JsonObject>());
 }
 
-// Valideert alles eerst; past pas toe als het geheel geldig is.
+// Validates everything first; only applies once the whole thing is valid.
 static bool applyConfig(JsonObjectConst in, const char** err) {
     zones::Settings settings = zones::settings();
     if (in["settings"].is<JsonObjectConst>() && !settingsFromJson(in["settings"], settings, err)) return false;
@@ -157,9 +158,9 @@ static bool applyConfig(JsonObjectConst in, const char** err) {
     }
 
     const char* tz = in["settings"]["timezone"] | "";
-    if (tz[0] && (strlen(tz) < 3 || strlen(tz) > 47)) return *err = "timezone: 3-47 tekens", false;
+    if (tz[0] && (strlen(tz) < 3 || strlen(tz) > 47)) return *err = "timezone: 3-47 characters", false;
 
-    // Zones eerst: programma-validatie kijkt niet naar zones, maar wel naar ZONE_COUNT.
+    // Zones first: program validation doesn't look at the zones, only at ZONE_COUNT.
     if (!programs::importConfig(in, err)) return false;
     zones::settings() = settings;
     for (uint8_t i = 0; i < ZONE_COUNT; i++) zones::config(i) = cfgs[i];
@@ -170,13 +171,13 @@ static bool applyConfig(JsonObjectConst in, const char** err) {
 bool importBackup(JsonObjectConst in, const char** err) {
     if (!applyConfig(in, err)) return false;
     for (uint8_t i = 0; i < ZONE_COUNT; i++) {
-        if (!zones::config(i).enabled) zones::close(i, zones::Source::Web, "uitgeschakeld");
+        if (!zones::config(i).enabled) zones::close(i, zones::Source::Web, "disabled");
     }
     markDirty();
     return true;
 }
 
-// ---------- bestand ----------
+// ---------- file ----------
 
 static void save() {
     if (!mounted) return;
@@ -186,52 +187,52 @@ static void save() {
     a["admin_hash"] = adminHash;
     a["api_key_hash"] = apiKeyHash;
 
-    // Eerst naar tijdelijk bestand, dan hernoemen: nooit een half bestand bij stroomuitval.
+    // Write to a temporary file first, then rename: never a half-written file on power loss.
     File f = LittleFS.open(CONFIG_TMP, "w");
     if (!f) {
-        LOG("Opslag: kan %s niet openen", CONFIG_TMP);
+        LOG("Storage: cannot open %s", CONFIG_TMP);
         return;
     }
     size_t n = serializeJson(doc, f);
     f.close();
     LittleFS.remove(CONFIG_PATH);
     LittleFS.rename(CONFIG_TMP, CONFIG_PATH);
-    LOG("Opslag: config opgeslagen (%u bytes)", (unsigned)n);
+    LOG("Storage: config saved (%u bytes)", (unsigned)n);
 }
 
 static void load() {
-    // Stroomuitval tussen remove en rename in save(): dan staat alleen het tijdelijke bestand er.
+    // Power loss between remove and rename in save(): then only the temporary file exists.
     const char* path = LittleFS.exists(CONFIG_PATH) ? CONFIG_PATH : CONFIG_TMP;
     File f = LittleFS.open(path, "r");
     if (!f) {
-        LOG("Opslag: geen config, standaardwaarden");
+        LOG("Storage: no config, using defaults");
         return;
     }
     JsonDocument doc;
     DeserializationError e = deserializeJson(doc, f);
     f.close();
     if (e || !doc.is<JsonObject>()) {
-        LOG("Opslag: config onleesbaar (%s), standaardwaarden", e.c_str());
+        LOG("Storage: config unreadable (%s), using defaults", e.c_str());
         return;
     }
     const char* err = nullptr;
     if (!applyConfig(doc.as<JsonObjectConst>(), &err)) {
-        LOG("Opslag: config ongeldig (%s), standaardwaarden", err);
+        LOG("Storage: config invalid (%s), using defaults", err);
         return;
     }
     strlcpy(adminHash, doc["auth"]["admin_hash"] | "", sizeof(adminHash));
     strlcpy(apiKeyHash, doc["auth"]["api_key_hash"] | "", sizeof(apiKeyHash));
-    LOG("Opslag: config geladen");
+    LOG("Storage: config loaded");
 }
 
 void begin() {
     mounted = LittleFS.begin();
     if (!mounted) {
-        LOG("Opslag: LittleFS mount mislukt, formatteren...");
+        LOG("Storage: LittleFS mount failed, formatting...");
         mounted = LittleFS.format() && LittleFS.begin();
     }
     if (!mounted) {
-        LOG("Opslag: LittleFS niet beschikbaar – wijzigingen worden niet bewaard");
+        LOG("Storage: LittleFS unavailable – changes will not be kept");
         return;
     }
     load();

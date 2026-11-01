@@ -3,13 +3,13 @@
 
 class AsyncWebServerRequest;
 
-// REST-API onder /api (CLAUDE.md §4). Body (JSON) staat, als die er is,
-// als nul-getermineerde string in req->_tempObject (zie web.cpp).
+// REST API under /api (CLAUDE.md §4). The body (JSON), if any, is available
+// as a null-terminated string in req->_tempObject (see web.cpp).
 namespace api {
 
 void handle(AsyncWebServerRequest* req);
 
-// Inhoud van GET /api/status; ook gebruikt voor de WebSocket-push.
+// Contents of GET /api/status; also used for the WebSocket push.
 void buildStatus(JsonDocument& doc);
 
 }  // namespace api

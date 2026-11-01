@@ -7,11 +7,12 @@
 
 namespace history {
 
+// Order is fixed: /log.bin stores indices into this table. Only append, never reorder.
 static const char* const REASONS[] = {
-    "",           "timer",        "max_looptijd", "handmatig", "noodstop", "uitgeschakeld",
-    "ota",        "herstart",     "limiet",       "winter",    "klaar",    "afgebroken",
-    "regenpauze", "overgeslagen", "loopt_al",     "geen_tijd", "auto",     "test",
-    "ongeldige_zone", "update_bezig", "geen_stappen", "factor_0", "opgeheven", "overig",
+    "",          "timer",   "max_runtime",     "manual",  "emergency_stop", "disabled",
+    "ota",       "restart", "limit",           "winter",  "done",           "aborted",
+    "rain_delay", "skipped", "already_running", "no_time", "auto",          "test",
+    "invalid_zone", "update_in_progress", "no_steps", "factor_zero", "cleared", "other",
 };
 static const uint8_t REASON_COUNT = sizeof(REASONS) / sizeof(REASONS[0]);
 
@@ -19,15 +20,15 @@ static const char* const ACTIONS[] = {
     "boot", "zone_opened", "zone_closed", "command_rejected", "max_runtime_reached", "emergency_stop",
     "program_started", "program_finished", "program_skipped", "mode_changed", "skip_set", "update",
 };
-static const char* const SOURCES[] = {"web", "api", "mqtt", "schema", "knop", "console", "systeem"};
+static const char* const SOURCES[] = {"web", "api", "mqtt", "schedule", "button", "console", "system"};
 
 struct Entry {
-    uint32_t t;         // epoch; 0 = klok nog niet gezet
-    uint32_t duration;  // seconden
+    uint32_t t;         // epoch; 0 = clock not set yet
+    uint32_t duration;  // seconds
     uint8_t action, zone, program, source, reason;
     uint8_t pad[3];
 };
-static_assert(sizeof(Entry) == 16, "Entry-layout staat ook in /log.bin");
+static_assert(sizeof(Entry) == 16, "Entry layout is also stored in /log.bin");
 
 struct LogFile {
     uint32_t magic;
@@ -41,8 +42,8 @@ struct Counters {
 };
 struct StatsFile {
     uint32_t magic;
-    int32_t weekKey;     // dagnummer van de maandag van de huidige week
-    int32_t seasonYear;  // kalenderjaar
+    int32_t weekKey;     // day number of the Monday of the current week
+    int32_t seasonYear;  // calendar year
     Counters zone[ZONE_COUNT];
 };
 static StatsFile stats;
@@ -60,10 +61,10 @@ static uint8_t reasonCode(const char* r) {
     for (uint8_t i = 0; i < REASON_COUNT; i++) {
         if (!strcmp(REASONS[i], r)) return i;
     }
-    return REASON_COUNT - 1;  // "overig"
+    return REASON_COUNT - 1;  // "other"
 }
 
-// Week/seizoen omzetten als we in een nieuwe week/jaar zitten (alleen met geldige klok).
+// Roll over week/season when we're in a new week/year (only with a valid clock).
 static void rollCounters() {
     struct tm lt;
     if (!ntp::localNow(lt)) return;
@@ -82,8 +83,8 @@ static void rollCounters() {
     }
 }
 
-// Leest direct in de (statische) buffer – geen kopie op de stack (4 KB!).
-// Bij een fout is `out` weer leeg.
+// Reads straight into the (static) buffer – no copy on the stack (4 KB!).
+// On error `out` is cleared again.
 template <typename T>
 static bool readFile(const char* path, T& out, uint32_t magic) {
     File f = LittleFS.open(path, "r");
@@ -112,7 +113,7 @@ void begin() {
     logbuf.magic = LOG_MAGIC;
     stats.magic = STATS_MAGIC;
     lastSave = millis();
-    LOG("Logboek: %u regels geladen", logbuf.count);
+    LOG("Log: %u entries loaded", logbuf.count);
 }
 
 void flush() {
@@ -174,13 +175,13 @@ size_t entryJson(uint16_t i, char* buf, size_t len) {
     const char* action = e.action < sizeof(ACTIONS) / sizeof(ACTIONS[0]) ? ACTIONS[e.action] : "?";
     const char* source = e.source < sizeof(SOURCES) / sizeof(SOURCES[0]) ? SOURCES[e.source] : "?";
 
-    // Alle waarden zijn vaste codes of getallen: geen JSON-escaping nodig.
+    // All values are fixed codes or numbers: no JSON escaping needed.
     int n = snprintf(buf, len, "{\"time\":%s%s%s,\"action\":\"%s\",\"source\":\"%s\"", e.t ? "\"" : "",
                      e.t ? time : "null", e.t ? "\"" : "", action, source);
     if (e.zone) n += snprintf(buf + n, len - n, ",\"zone\":%u", e.zone);
     if (e.program) n += snprintf(buf + n, len - n, ",\"program\":%u", e.program == PROGRAM_TEST ? 0 : e.program);
     if (e.duration) n += snprintf(buf + n, len - n, ",\"duration_s\":%lu", (unsigned long)e.duration);
-    if (e.reason) n += snprintf(buf + n, len - n, ",\"reason\":\"%s\"", e.reason < REASON_COUNT ? REASONS[e.reason] : "overig");
+    if (e.reason) n += snprintf(buf + n, len - n, ",\"reason\":\"%s\"", e.reason < REASON_COUNT ? REASONS[e.reason] : "other");
     n += snprintf(buf + n, len - n, "}");
     return n < (int)len ? n : 0;
 }

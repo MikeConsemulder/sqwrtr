@@ -2,8 +2,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-// Logboek (ringbuffer van LOG_ENTRIES in RAM, periodiek naar LittleFS) en
-// looptijdtellers per zone (totaal / deze week / dit seizoen = kalenderjaar).
+// Log (ring buffer of LOG_ENTRIES in RAM, periodically written to LittleFS) and
+// runtime counters per zone (total / this week / this season = calendar year).
 namespace history {
 
 enum class Action : uint8_t {
@@ -11,23 +11,23 @@ enum class Action : uint8_t {
     ProgramStarted, ProgramFinished, ProgramSkipped, ModeChanged, SkipSet, Update,
 };
 
-void begin();  // na storage::begin() (LittleFS gemount)
+void begin();  // after storage::begin() (LittleFS mounted)
 void loop();
-void flush();  // direct opslaan (vóór herstart/update)
+void flush();  // save immediately (before restart/update)
 
-static const uint8_t PROGRAM_TEST = 0xFF;  // testcyclus (program 0 = n.v.t.)
+static const uint8_t PROGRAM_TEST = 0xFF;  // test cycle (program 0 = n/a)
 
-// zone en program 1-based, 0 = n.v.t. source = zones::Source als getal.
-// reason: een van de bekende redencodes (zie history.cpp), anders "overig".
+// zone and program are 1-based, 0 = n/a. source = zones::Source as a number.
+// reason: one of the known reason codes (see history.cpp), otherwise "other".
 void add(Action a, uint8_t zone, uint8_t program, uint32_t durationS, uint8_t source, const char* reason);
 
-// Zone (0-based) was durationS open → tellers bijwerken.
+// Zone (0-based) was open for durationS → update the counters.
 void addRuntime(uint8_t zone, uint32_t durationS);
 
 void runtimeJson(JsonObject o, uint8_t zone);
-// Logregel i (0 = nieuwste) als JSON-object in buf. 0 als die regel niet bestaat.
-// Bewust zonder JsonDocument: /api/log streamt regel voor regel (200 regels als
-// JsonDocument zou >20 KB heap kosten).
+// Log entry i (0 = newest) as a JSON object in buf. 0 if that entry doesn't exist.
+// Deliberately without JsonDocument: /api/log streams entry by entry (200 entries
+// as a JsonDocument would cost >20 KB of heap).
 size_t entryJson(uint16_t i, char* buf, size_t len);
 
 }  // namespace history

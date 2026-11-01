@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -58,7 +58,7 @@ input[type=range]{width:100%;padding:0;accent-color:var(--acc)}
 .hide{display:none!important}
 @media(max-width:420px){
   .stat{padding:8px 10px}.stat b{font-size:1em}
-  .zone .row button{padding:8px 10px}.zone input[type=number]{width:4em}.zone .row{gap:6px}
+  .zone .row button{padding:8px 10px}.zone input[type=number]{width:3.4em}.zone .row{gap:6px}
 }
 </style>
 </head>
@@ -66,137 +66,137 @@ input[type=range]{width:100%;padding:0;accent-color:var(--acc)}
 <header>
   <div class="bar"><h1>sqwrtr</h1><span id="conn" class="mute"><span class="dot"></span> <small>offline</small></span></div>
   <nav id="nav" class="hide">
-    <a href="#/">Dashboard</a><a href="#/programmas">Programma's</a><a href="#/zones">Zones</a>
-    <a href="#/logboek">Logboek</a><a href="#/instellingen">Instellingen</a><a href="#/systeem">Systeem</a>
+    <a href="#/">Dashboard</a><a href="#/programs">Programs</a><a href="#/zones">Zones</a>
+    <a href="#/log">Log</a><a href="#/settings">Settings</a><a href="#/system">System</a>
   </nav>
 </header>
 <main>
 
 <form id="login" class="card hide" onsubmit="doLogin(event)">
-  <h2 style="margin-top:0">Inloggen</h2>
-  <div class="row"><input id="pw" class="grow" type="password" placeholder="Admin-wachtwoord" autocomplete="current-password" required><button class="p">Inloggen</button></div>
+  <h2 style="margin-top:0">Log in</h2>
+  <div class="row"><input id="pw" class="grow" type="password" placeholder="Admin password" autocomplete="current-password" required><button class="p">Log in</button></div>
 </form>
 
 <section id="p-dashboard" class="page hide">
-  <div class="card"><button class="stop" onclick="estop()">NOODSTOP</button></div>
+  <div class="card"><button class="stop" onclick="estop()">EMERGENCY STOP</button></div>
   <div class="stats">
     <div class="stat"><small>Open</small><b id="s-open">–</b></div>
     <div class="stat"><small>Factor</small><b id="s-factor">–</b></div>
-    <div class="stat"><small>Tijd</small><b id="s-time">–</b></div>
+    <div class="stat"><small>Time</small><b id="s-time">–</b></div>
   </div>
   <div class="card">
-    <div class="seg" id="modes"><button data-m="auto">Auto</button><button data-m="handmatig">Handmatig</button><button data-m="winter" class="winter">Winter</button></div>
+    <div class="seg" id="modes"><button data-m="auto">Auto</button><button data-m="manual">Manual</button><button data-m="winter" class="winter">Winter</button></div>
     <p class="mute" id="mode-text" style="margin:8px 0 0"></p>
   </div>
   <div class="card" id="runs-card">
-    <div class="row"><h2 class="grow" style="margin:0">Programma</h2><button onclick="testCycle()" id="test-btn">Testcyclus</button></div>
+    <div class="row"><h2 class="grow" style="margin:0">Program</h2><button onclick="testCycle()" id="test-btn">Test cycle</button></div>
     <div id="runs"></div>
     <p class="mute" id="next-run" style="margin:8px 0 0"></p>
   </div>
   <div class="card" id="skip-card">
-    <div class="row"><h2 class="grow" style="margin:0">Regenpauze</h2><span class="badge" id="skip-badge">uit</span></div>
+    <div class="row"><h2 class="grow" style="margin:0">Rain delay</h2><span class="badge" id="skip-badge">off</span></div>
     <p id="skip-text" class="mute" style="margin:8px 0"></p>
-    <div class="row"><button onclick="skipHours(24)">24 uur overslaan</button><button onclick="skipNextRun()">Volgende run overslaan</button>
-    <button id="skip-off" onclick="skipHours(0)">Opheffen</button></div>
+    <div class="row"><button onclick="skipHours(24)">Skip 24 h</button><button onclick="skipNextRun()">Skip next run</button>
+    <button id="skip-off" onclick="skipHours(0)">Clear</button></div>
   </div>
   <div id="zones"></div>
 </section>
 
-<section id="p-programmas" class="page hide">
-  <div class="row" style="margin-top:10px"><h2 class="grow" style="margin:0">Programma's</h2><button class="p" id="new-prog" onclick="editProg(0)">Nieuw programma</button></div>
+<section id="p-programs" class="page hide">
+  <div class="row" style="margin-top:10px"><h2 class="grow" style="margin:0">Programs</h2><button class="p" id="new-prog" onclick="editProg(0)">New program</button></div>
   <form id="editor" class="card hide" onsubmit="saveProg(event)">
-    <h2 style="margin-top:0" id="ed-title">Nieuw programma</h2>
-    <label for="ed-name">Naam</label><input id="ed-name" class="w" maxlength="23" required placeholder="bijv. Gazon ochtend">
-    <label class="row" style="font-weight:400"><input type="checkbox" id="ed-enabled"> Actief (start automatisch)</label>
-    <label>Starttijden</label><div id="ed-starts" class="row"></div>
-    <button type="button" id="ed-add-start" onclick="addStart()" style="margin-top:6px">+ Starttijd</button>
-    <label>Wanneer</label>
-    <div class="seg" id="ed-kind"><button type="button" data-k="days">Weekdagen</button><button type="button" data-k="every">Elke N dagen</button></div>
+    <h2 style="margin-top:0" id="ed-title">New program</h2>
+    <label for="ed-name">Name</label><input id="ed-name" class="w" maxlength="23" required placeholder="e.g. Lawn morning">
+    <label class="row" style="font-weight:400"><input type="checkbox" id="ed-enabled"> Enabled (starts automatically)</label>
+    <label>Start times</label><div id="ed-starts" class="row"></div>
+    <button type="button" id="ed-add-start" onclick="addStart()" style="margin-top:6px">+ Start time</button>
+    <label>When</label>
+    <div class="seg" id="ed-kind"><button type="button" data-k="days">Weekdays</button><button type="button" data-k="every">Every N days</button></div>
     <div id="ed-days" class="days" style="margin-top:8px"></div>
-    <div id="ed-every" class="row hide" style="margin-top:8px">Elke <input id="ed-n" type="number" min="1" max="30" value="2"> dagen, vanaf <input id="ed-from" type="date"></div>
-    <label>Stappen <small>(achter elkaar, met <span id="ed-pause">5</span> s pauze)</small></label>
+    <div id="ed-every" class="row hide" style="margin-top:8px">Every <input id="ed-n" type="number" min="1" max="30" value="2"> days, from <input id="ed-from" type="date"></div>
+    <label>Steps <small>(one after another, with <span id="ed-pause">5</span> s pause)</small></label>
     <div id="ed-steps" class="steps"></div>
-    <button type="button" id="ed-add-step" onclick="addStep()">+ Stap</button>
-    <div class="row" style="margin-top:14px"><button class="p">Opslaan</button><button type="button" onclick="closeEditor()">Annuleren</button>
-    <span class="grow"></span><button type="button" class="d" id="ed-del" onclick="delProg()">Verwijderen</button></div>
+    <button type="button" id="ed-add-step" onclick="addStep()">+ Step</button>
+    <div class="row" style="margin-top:14px"><button class="p">Save</button><button type="button" onclick="closeEditor()">Cancel</button>
+    <span class="grow"></span><button type="button" class="d" id="ed-del" onclick="delProg()">Delete</button></div>
   </form>
   <div id="progs"></div>
-  <p class="mute"><small>Looptijden worden geschaald met de seizoensfactor en de factor per zonetype (Instellingen).</small></p>
+  <p class="mute"><small>Run times are scaled by the season factor and the per-zone-type factor (Settings).</small></p>
 </section>
 
 <section id="p-zones" class="page hide"><div id="zone-forms"></div></section>
 
-<section id="p-logboek" class="page hide">
-  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Logboek</h2><button onclick="loadLog()">Vernieuwen</button></div>
-  <p class="mute"><small>Laatste 200 gebeurtenissen, nieuwste bovenaan. Ververst vanzelf.</small></p>
+<section id="p-log" class="page hide">
+  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Log</h2><button onclick="loadLog()">Refresh</button></div>
+  <p class="mute"><small>Last 200 events, newest first. Updates automatically.</small></p>
   <ul id="log" class="log"></ul></div>
 </section>
 
-<section id="p-instellingen" class="page hide">
-  <div id="pw-warn" class="card warn hide">Je gebruikt nog het standaardwachtwoord uit <code>secrets.h</code>. Wijzig het hieronder.</div>
+<section id="p-settings" class="page hide">
+  <div id="pw-warn" class="card warn hide">You are still using the default password from <code>secrets.h</code>. Change it below.</div>
   <form class="card" onsubmit="saveSafety(event)">
-    <h2 style="margin-top:0">Veiligheid</h2>
-    <label for="mc">Max kleppen tegelijk open</label>
+    <h2 style="margin-top:0">Safety</h2>
+    <label for="mc">Max valves open at once</label>
     <input id="mc" type="number" min="1" max="5" required>
-    <small id="mc-warn" class="hide" style="display:block;color:var(--warn)">Let op: de 30 W-adapter is berekend op max 2 kleppen.</small>
-    <label for="sg">Vertraging tussen inschakelen (ms)</label>
+    <small id="mc-warn" class="hide" style="display:block;color:var(--warn)">Note: the 30 W adapter is rated for max 2 valves.</small>
+    <label for="sg">Delay between switching on (ms)</label>
     <input id="sg" type="number" min="0" max="10000" step="100" required>
-    <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div>
+    <div class="row" style="margin-top:12px"><button class="p">Save</button></div>
   </form>
   <form class="card" onsubmit="saveFactors(event)">
-    <h2 style="margin-top:0">Looptijden</h2>
-    <p class="mute" style="margin:0"><small>Home Assistant stuurt de seizoensfactor later automatisch bij (weer).</small></p>
-    <label for="f-season">Seizoensfactor <b id="f-season-v"></b></label><input id="f-season" type="range" min="0" max="200" step="5">
-    <label for="f-gazon">Factor gazon <b id="f-gazon-v"></b></label><input id="f-gazon" type="range" min="0" max="200" step="5">
-    <label for="f-border">Factor border / heg <b id="f-border-v"></b></label><input id="f-border" type="range" min="0" max="200" step="5">
-    <label for="f-pause">Pauze tussen zones in een programma (s)</label><input id="f-pause" type="number" min="0" max="600">
-    <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div>
+    <h2 style="margin-top:0">Run times</h2>
+    <p class="mute" style="margin:0"><small>Home Assistant will later adjust the season factor automatically (weather).</small></p>
+    <label for="f-season">Season factor <b id="f-season-v"></b></label><input id="f-season" type="range" min="0" max="200" step="5">
+    <label for="f-lawn">Lawn factor <b id="f-lawn-v"></b></label><input id="f-lawn" type="range" min="0" max="200" step="5">
+    <label for="f-border">Border / hedge factor <b id="f-border-v"></b></label><input id="f-border" type="range" min="0" max="200" step="5">
+    <label for="f-pause">Pause between zones in a program (s)</label><input id="f-pause" type="number" min="0" max="600">
+    <div class="row" style="margin-top:12px"><button class="p">Save</button></div>
   </form>
   <form class="card" onsubmit="changePw(event)">
-    <h2 style="margin-top:0">Wachtwoord wijzigen</h2>
-    <label for="pw0">Huidig wachtwoord</label><input id="pw0" class="w" type="password" autocomplete="current-password" required>
-    <label for="pw1">Nieuw wachtwoord <small>(min. 8 tekens)</small></label><input id="pw1" class="w" type="password" minlength="8" maxlength="64" autocomplete="new-password" required>
-    <label for="pw2">Herhaal nieuw wachtwoord</label><input id="pw2" class="w" type="password" autocomplete="new-password" required>
-    <div class="row" style="margin-top:12px"><button class="p">Wijzigen</button></div>
+    <h2 style="margin-top:0">Change password</h2>
+    <label for="pw0">Current password</label><input id="pw0" class="w" type="password" autocomplete="current-password" required>
+    <label for="pw1">New password <small>(min. 8 characters)</small></label><input id="pw1" class="w" type="password" minlength="8" maxlength="64" autocomplete="new-password" required>
+    <label for="pw2">Repeat new password</label><input id="pw2" class="w" type="password" autocomplete="new-password" required>
+    <div class="row" style="margin-top:12px"><button class="p">Change</button></div>
   </form>
   <div class="card">
-    <h2 style="margin-top:0">API-key</h2>
-    <p class="mute" id="key-state">Voor Home Assistant en scripts: header <code>X-API-Key</code>.</p>
+    <h2 style="margin-top:0">API key</h2>
+    <p class="mute" id="key-state">For Home Assistant and scripts: header <code>X-API-Key</code>.</p>
     <div id="key-new" class="hide"><code id="key-val" class="key"></code>
-      <div class="row"><button onclick="copyKey()">Kopiëren</button><small class="mute">Wordt maar één keer getoond.</small></div></div>
-    <div class="row" style="margin-top:12px"><button onclick="newKey()">Nieuwe API-key genereren</button></div>
+      <div class="row"><button onclick="copyKey()">Copy</button><small class="mute">Shown only once.</small></div></div>
+    <div class="row" style="margin-top:12px"><button onclick="newKey()">Generate new API key</button></div>
   </div>
-  <form class="card" onsubmit="saveTz(event)"><h2 style="margin-top:0">Tijd</h2>
+  <form class="card" onsubmit="saveTz(event)"><h2 style="margin-top:0">Time</h2>
     <p class="mute" id="tz-now" style="margin:0"></p>
-    <label for="tz">Tijdzone <small>(POSIX)</small></label><input id="tz" class="w" maxlength="47">
-    <div class="row" style="margin-top:12px"><button class="p">Opslaan</button></div></form>
-  <div class="card"><h2 style="margin-top:0">MQTT</h2><p class="mute">MQTT en Home Assistant komen in fase 6.</p></div>
+    <label for="tz">Time zone <small>(POSIX)</small></label><input id="tz" class="w" maxlength="47">
+    <div class="row" style="margin-top:12px"><button class="p">Save</button></div></form>
+  <div class="card"><h2 style="margin-top:0">MQTT</h2><p class="mute">MQTT and Home Assistant arrive in phase 6.</p></div>
 </section>
 
-<section id="p-systeem" class="page hide">
-  <div class="card"><div class="row"><h2 class="grow" style="margin:0">Systeem</h2><button onclick="loadInfo()">Vernieuwen</button></div>
+<section id="p-system" class="page hide">
+  <div class="card"><div class="row"><h2 class="grow" style="margin:0">System</h2><button onclick="loadInfo()">Refresh</button></div>
     <table id="info" style="margin-top:8px"></table></div>
   <div class="card"><h2 style="margin-top:0">Firmware</h2>
-    <p class="mute">Nieuwe firmware of bestandssysteem uploaden. Alleen als alle kleppen dicht zijn.</p>
-    <a href="/update"><button class="p">Naar update-pagina</button></a></div>
+    <p class="mute">Upload new firmware or file system. Only while all valves are closed.</p>
+    <a href="/update"><button class="p">Go to update page</button></a></div>
   <div class="card"><h2 style="margin-top:0">Backup</h2>
-    <p class="mute">Zones en instellingen als JSON (zonder wachtwoord en API-key).</p>
-    <div class="row"><a href="/api/backup" download="sqwrtr-config.json"><button>Backup downloaden</button></a>
-    <label class="row" style="margin:0"><button type="button" onclick="$('#restore').click()">Backup terugzetten…</button></label>
+    <p class="mute">Zones and settings as JSON (without password and API key).</p>
+    <div class="row"><a href="/api/backup" download="sqwrtr-config.json"><button>Download backup</button></a>
+    <label class="row" style="margin:0"><button type="button" onclick="$('#restore').click()">Restore backup…</button></label>
     <input id="restore" type="file" accept=".json,application/json" class="hide" onchange="restore(this)"></div></div>
-  <div class="card"><h2 style="margin-top:0">Herstarten</h2>
-    <p class="mute">Alle kleppen gaan dicht. Na een herstart moet je opnieuw inloggen.</p>
-    <button class="d" onclick="reboot()">Herstarten</button>
-    <button onclick="logout()">Uitloggen</button></div>
-  <div class="card"><h2 style="margin-top:0">Aansluitingen relaisbord</h2>
-    <table><tr><th>ESP-bord</th><th>Relaisbord</th></tr>
+  <div class="card"><h2 style="margin-top:0">Restart</h2>
+    <p class="mute">All valves close. After a restart you need to log in again.</p>
+    <button class="d" onclick="reboot()">Restart</button>
+    <button onclick="logout()">Log out</button></div>
+  <div class="card"><h2 style="margin-top:0">Relay board wiring</h2>
+    <table><tr><th>ESP board</th><th>Relay board</th></tr>
     <tr><td class="m">D1</td><td>IN1 (zone 1)</td></tr><tr><td class="m">D2</td><td>IN2 (zone 2)</td></tr>
     <tr><td class="m">D5</td><td>IN3 (zone 3)</td></tr><tr><td class="m">D6</td><td>IN4 (zone 4)</td></tr>
     <tr><td class="m">D7</td><td>IN5 (zone 5)</td></tr>
-    <tr><td class="m">3V3</td><td>VCC <small>(rij met IN-pinnen)</small></td></tr>
-    <tr><td class="m">5 V +</td><td>JD-VCC <small>(jumper eraf)</small></td></tr>
+    <tr><td class="m">3V3</td><td>VCC <small>(row with IN pins)</small></td></tr>
+    <tr><td class="m">5 V +</td><td>JD-VCC <small>(jumper removed)</small></td></tr>
     <tr><td class="m">5 V − / GND</td><td>GND</td></tr></table>
-    <p class="mute"><small>Niet gebruiken: <b>D8</b> (boot faalt), <b>D3</b> = FLASH-knop, <b>D4</b> = LED. Gereserveerd: D0 hoofdklep/pomp (IN6), RX flowmeter, A0 regensensor.</small></p></div>
+    <p class="mute"><small>Do not use: <b>D8</b> (boot fails), <b>D3</b> = FLASH button, <b>D4</b> = LED. Reserved: D0 master valve/pump (IN6), RX flow meter, A0 rain sensor.</small></p></div>
 </section>
 
 </main>
@@ -212,7 +212,7 @@ async function api(path,method='GET',body){
   const r=await fetch('/api'+path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
   if(r.status==401&&path!='/login'){showLogin();throw new Error('login')}
   const j=await r.json().catch(()=>({}));
-  if(!r.ok){toast(j.message||('Fout '+r.status));throw new Error(j.error||r.status)}
+  if(!r.ok){toast(j.message||('Error '+r.status));throw new Error(j.error||r.status)}
   return j}
 
 // ---------- login ----------
@@ -223,18 +223,18 @@ async function doLogin(e){e.preventDefault();
 async function logout(){await api('/logout','POST').catch(()=>{});showLogin()}
 
 // ---------- routing ----------
-const pages={'':'dashboard',programmas:'programmas',zones:'zones',logboek:'logboek',instellingen:'instellingen',systeem:'systeem'};
+const pages={'':'dashboard',programs:'programs',zones:'zones',log:'log',settings:'settings',system:'system'};
 function route(){if(!loggedIn)return;const key=location.hash.replace(/^#\/?/,'');const p=pages[key]||'dashboard';
   document.querySelectorAll('.page').forEach(s=>s.classList.toggle('hide',s.id!='p-'+p));
   document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')=='#/'+key));
   const on=$('nav a.on');if(on)on.scrollIntoView({inline:'center',block:'nearest'});
-  if(p=='zones')loadZones();if(p=='instellingen')loadSettings();if(p=='systeem')loadInfo();
-  if(p=='programmas')loadProgs();if(p=='logboek')loadLog()}
+  if(p=='zones')loadZones();if(p=='settings')loadSettings();if(p=='system')loadInfo();
+  if(p=='programs')loadProgs();if(p=='log')loadLog()}
 const page=()=>pages[location.hash.replace(/^#\/?/,'')]||'dashboard';
 window.addEventListener('hashchange',route);
 
 // ---------- dashboard ----------
-function fmt(s){if(s>=3600)return Math.floor(s/3600)+' u '+String(Math.floor(s%3600/60)).padStart(2,'0')+' min';
+function fmt(s){if(s>=3600)return Math.floor(s/3600)+' h '+String(Math.floor(s%3600/60)).padStart(2,'0')+' min';
   return s>=60?Math.floor(s/60)+':'+String(s%60).padStart(2,'0'):s+' s'}
 function renderStatus(){if(!status)return;
   $('#s-open').textContent=status.active+' / '+status.max_concurrent;
@@ -245,46 +245,46 @@ function renderStatus(){if(!status)return;
     <div class="row"><h3>${z.id}. <span class="n"></span></h3><span class="badge"></span></div>
     <div class="pin mute"><small>Pin <b>${z.pin}</b> → relais <b>IN${z.relay}</b></small></div>
     <div class="big r">&nbsp;</div>
-    <div class="row"><input type="number" min="1" max="240" id="m${z.id}" aria-label="Minuten"><span class="mute">min</span>
-    <button class="p o1" onclick="openZ(${z.id},true)">Open</button><button class="o2" onclick="openZ(${z.id},false)" title="Open tot max looptijd">Open ∞</button>
-    <button class="c" onclick="closeZ(${z.id})">Sluit</button></div></div>`).join('');
+    <div class="row"><input type="number" min="1" max="240" id="m${z.id}" aria-label="Minutes"><span class="mute">min</span>
+    <button class="p o1" onclick="openZ(${z.id},true)">Open</button><button class="o2" onclick="openZ(${z.id},false)" title="Open until max runtime">Open ∞</button>
+    <button class="c" onclick="closeZ(${z.id})">Close</button></div></div>`).join('');
   for(const z of status.zones){const c=$('#z'+z.id);
     c.querySelector('.n').textContent=z.name;c.classList.toggle('open',z.state=='open');
     const b=c.querySelector('.badge');b.className='badge '+(z.enabled?z.state:'');
-    b.textContent=!z.enabled?'uitgeschakeld':{open:'open',pending:'wacht',closed:'dicht'}[z.state];
-    c.querySelector('.r').textContent=z.state=='closed'?' ':(z.state=='pending'?'Start zo…':'Nog '+fmt(z.remaining_s));
+    b.textContent=!z.enabled?'disabled':{open:'open',pending:'waiting',closed:'closed'}[z.state];
+    c.querySelector('.r').textContent=z.state=='closed'?' ':(z.state=='pending'?'Starting soon…':fmt(z.remaining_s)+' left');
     const inp=$('#m'+z.id);if(!inp.value&&document.activeElement!=inp)inp.value=Math.round(z.default_duration_s/60)||1;
     c.querySelector('.o1').disabled=c.querySelector('.o2').disabled=!z.enabled;c.querySelector('.c').disabled=z.state=='closed'}}
 async function openZ(id,timed){const body=timed?{duration_s:Math.max(1,Math.round(parseFloat($('#m'+id).value)*60))}:{};
   try{status.zones[id-1]=Object.assign(status.zones[id-1],await api('/zones/'+id+'/open','POST',body));renderStatus()}catch(_){}}
 async function closeZ(id){try{await api('/zones/'+id+'/close','POST')}catch(_){}}
-async function estop(){try{await api('/stop','POST');toast('Noodstop: alle kleppen dicht')}catch(_){}}
-const MODE_TXT={auto:'Programma\'s starten automatisch.',handmatig:'Programma\'s starten niet vanzelf; handbediening en "Start nu" werken wel.',
-  winter:'Alles geblokkeerd behalve de noodstop.',test:'Testcyclus loopt: elke ingeschakelde zone 1 minuut.'};
+async function estop(){try{await api('/stop','POST');toast('Emergency stop: all valves closed')}catch(_){}}
+const MODE_TXT={auto:'Programs start automatically.',manual:'Programs do not start on their own; manual control and "Start now" still work.',
+  winter:'Everything blocked except the emergency stop.',test:'Test cycle running: each enabled zone for 1 minute.'};
 function renderMode(){document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m==status.mode));
   $('#mode-text').textContent=MODE_TXT[status.mode]||'';$('#test-btn').disabled=status.mode=='winter'||status.mode=='test'}
 document.querySelectorAll('#modes button').forEach(b=>b.onclick=async()=>{
-  if(b.dataset.m=='winter'&&!confirm('Wintermodus: alle kleppen dicht en alles geblokkeerd. Doorgaan?'))return;
+  if(b.dataset.m=='winter'&&!confirm('Winter mode: all valves closed and everything blocked. Continue?'))return;
   try{await api('/mode','PUT',{mode:b.dataset.m})}catch(_){}});
-function renderRuns(){const st={running:'loopt',pause:'pauze',waiting:'wacht op vrije klep'};
+function renderRuns(){const st={running:'running',pause:'pause',waiting:'waiting for free valve'};
   let h=status.runs.map(r=>`<div class="row" style="margin-top:8px"><b class="grow">${esc(r.name)}</b><span class="badge open">${st[r.state]}</span></div>
-    <div class="mute"><small>Stap ${r.step} van ${r.steps}${r.zone?' · '+esc(zn({zone:r.zone})):''}</small></div>
-    ${r.remaining_s!=null?`<div class="big">Nog ${fmt(r.remaining_s)}</div>`:''}`).join('');
-  if(status.queue.length)h+=`<p style="margin:8px 0 0"><small class="mute">Wachtrij:</small> ${status.queue.map(q=>esc(q.name)).join(', ')}</p>`;
-  $('#runs').innerHTML=h||'<p class="mute" style="margin:8px 0 0">Er loopt geen programma.</p>';
-  const n=status.next_run;$('#next-run').innerHTML=n?`Volgende: <b>${esc(n.name)}</b> · ${dayLabel(n.at)}`:(status.time_valid?'Geen geplande runs.':'Klok nog niet gezet – schema\'s wachten op NTP.')}
+    <div class="mute"><small>Step ${r.step} of ${r.steps}${r.zone?' · '+esc(zn({zone:r.zone})):''}</small></div>
+    ${r.remaining_s!=null?`<div class="big">${fmt(r.remaining_s)} left</div>`:''}`).join('');
+  if(status.queue.length)h+=`<p style="margin:8px 0 0"><small class="mute">Queue:</small> ${status.queue.map(q=>esc(q.name)).join(', ')}</p>`;
+  $('#runs').innerHTML=h||'<p class="mute" style="margin:8px 0 0">No program running.</p>';
+  const n=status.next_run;$('#next-run').innerHTML=n?`Next: <b>${esc(n.name)}</b> · ${dayLabel(n.at)}`:(status.time_valid?'No scheduled runs.':'Clock not set yet – schedules wait for NTP.')}
 function dayLabel(at){const d=new Date(at.replace(' ','T')),t=new Date();const diff=Math.round((new Date(d.toDateString())-new Date(t.toDateString()))/864e5);
-  return (diff==0?'vandaag':diff==1?'morgen':d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'short'}))+' '+at.slice(11)}
+  return (diff==0?'today':diff==1?'tomorrow':d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'}))+' '+at.slice(11)}
 function renderSkip(){const k=status.skip,on=k.active||k.next;
-  $('#skip-badge').textContent=k.active?'actief':k.next?'volgende run':'uit';$('#skip-badge').className='badge'+(on?' pending':'');
-  $('#skip-text').textContent=k.active?`Tot ${dayLabel(k.until)}${k.reason?' – '+k.reason:''}.`:k.next?`De volgende geplande run wordt overgeslagen${k.reason?' – '+k.reason:''}.`:'Geplande runs gaan gewoon door.';
+  $('#skip-badge').textContent=k.active?'active':k.next?'next run':'off';$('#skip-badge').className='badge'+(on?' pending':'');
+  $('#skip-text').textContent=k.active?`Until ${dayLabel(k.until)}${k.reason?' – '+k.reason:''}.`:k.next?`The next scheduled run will be skipped${k.reason?' – '+k.reason:''}.`:'Scheduled runs continue as normal.';
   $('#skip-off').disabled=!on}
-async function skipHours(h){try{await api('/skip','POST',{hours:h,reason:h?'handmatig via web':''});toast(h?'Overslaan '+h+' uur':'Regenpauze opgeheven')}catch(_){}}
-async function skipNextRun(){try{await api('/skip','POST',{next:true,reason:'handmatig via web'});toast('Volgende run wordt overgeslagen')}catch(_){}}
-async function testCycle(){if(!confirm('Testcyclus: elke ingeschakelde zone 1 minuut, achter elkaar. Starten?'))return;
-  try{await api('/test','POST');toast('Testcyclus gestart')}catch(_){}}
+async function skipHours(h){try{await api('/skip','POST',{hours:h,reason:h?'manual via web':''});toast(h?'Skipping '+h+' h':'Rain delay cleared')}catch(_){}}
+async function skipNextRun(){try{await api('/skip','POST',{next:true,reason:'manual via web'});toast('Next run will be skipped')}catch(_){}}
+async function testCycle(){if(!confirm('Test cycle: each enabled zone for 1 minute, one after another. Start?'))return;
+  try{await api('/test','POST');toast('Test cycle started')}catch(_){}}
 
-// lokaal aftellen tussen status-pushes
+// count down locally between status pushes
 setInterval(()=>{if(!status)return;let any=false;
   for(const z of status.zones)if(z.state=='open'&&z.remaining_s>0){z.remaining_s--;any=true}
   for(const r of status.runs)if(r.remaining_s>0){r.remaining_s--;any=true}if(any)renderStatus()},1000);
@@ -300,64 +300,65 @@ function connect(){if(ws)return;ws=new WebSocket((location.protocol=='https:'?'w
 async function poll(){try{status=await api('/status');renderStatus()}catch(_){}}
 
 const zn=d=>{const z=status&&status.zones[d.zone-1];return z?z.name:'Zone '+d.zone};
-const pn=id=>id==0?'Testcyclus':((progs.find(p=>p.id==id)||{}).name||'Programma '+id);
-const why={timer:'tijd om',max_looptijd:'max looptijd',handmatig:'handmatig',noodstop:'noodstop',uitgeschakeld:'uitgeschakeld',ota:'update',herstart:'herstart',
-  klaar:'klaar',afgebroken:'afgebroken',winter:'wintermodus',regenpauze:'regenpauze',overgeslagen:'overgeslagen',loopt_al:'liep al',limiet:'te veel kleppen open',ongeldige_zone:'onbekende zone'};
+const pn=id=>id==0?'Test cycle':((progs.find(p=>p.id==id)||{}).name||'Program '+id);
+const why={no_time:'clock not set',update_in_progress:'update in progress',no_steps:'no steps',factor_zero:'factor is 0',other:'other',timer:'time up',max_runtime:'max runtime',manual:'manual',emergency_stop:'emergency stop',disabled:'disabled',ota:'update',restart:'restart',
+  done:'done',aborted:'aborted',winter:'winter mode',rain_delay:'rain delay',skipped:'skipped',already_running:'already running',limit:'too many valves open',invalid_zone:'unknown zone'};
 const W=r=>why[r]||r||'';
 function describe(t,d){switch(t){
-  case 'zone_opened':return `${zn(d)} open${d.onbepaald?' (onbepaald, max '+fmt(d.duur_s)+')':' voor '+fmt(d.duur_s)} · ${d.bron}`;
-  case 'zone_closed':return `${zn(d)} dicht na ${fmt(d.duur_s)} · ${W(d.reden)}`;
-  case 'command_rejected':return `Geweigerd: ${zn(d)} – ${W(d.reden)}`;
-  case 'max_runtime_reached':return `${zn(d)}: max looptijd bereikt`;
-  case 'emergency_stop':return `NOODSTOP · ${d.bron}`;
-  case 'program_started':return `${d.naam} gestart · ${d.bron}`;
-  case 'program_finished':return `${d.naam} ${d.reden=='klaar'?'klaar':'gestopt ('+W(d.reden)+')'} na ${fmt(d.duur_s)}`;
-  case 'program_skipped':return `${d.naam} overgeslagen – ${W(d.reden)}`;
-  case 'mode_changed':return `Modus: ${d.modus}`;
-  case 'update_started':return `Update gestart (${d.type})`;case 'update_finished':return 'Update klaar, herstarten';
-  case 'update_failed':return `Update mislukt: ${d.fout}`;case 'wifi_fallback_ap':return 'Fallback-AP aan';
+  case 'zone_opened':return `${zn(d)} open${d.indefinite?' (indefinite, max '+fmt(d.duration_s)+')':' for '+fmt(d.duration_s)} · ${d.source}`;
+  case 'zone_closed':return `${zn(d)} closed after ${fmt(d.duration_s)} · ${W(d.reason)}`;
+  case 'command_rejected':return `Rejected: ${zn(d)} – ${W(d.reason)}`;
+  case 'max_runtime_reached':return `${zn(d)}: max runtime reached`;
+  case 'emergency_stop':return `EMERGENCY STOP · ${d.source}`;
+  case 'program_started':return `${d.name} started · ${d.source}`;
+  case 'program_finished':return `${d.name} ${d.reason=='done'?'done':'stopped ('+W(d.reason)+')'} after ${fmt(d.duration_s)}`;
+  case 'program_skipped':return `${d.name} skipped – ${W(d.reason)}`;
+  case 'mode_changed':return `Mode: ${d.mode}`;
+  case 'update_started':return `Update started (${d.type})`;case 'update_finished':return 'Update done, restarting';
+  case 'update_failed':return `Update failed: ${d.error}`;case 'wifi_fallback_ap':return 'Fallback AP on';
   default:return null}}
 function onEvent(t,d){
   if(['command_rejected','max_runtime_reached','emergency_stop','program_skipped'].includes(t)){const m=describe(t,d);if(m)toast(m)}
-  if(page()=='logboek'){clearTimeout(onEvent.t);onEvent.t=setTimeout(loadLog,600)}
-  if(page()=='programmas'&&t.startsWith('program_')&&editing===null){clearTimeout(onEvent.p);onEvent.p=setTimeout(loadProgs,600)}}
-// logboekregel (API) -> tekst
+  if(page()=='log'){clearTimeout(onEvent.t);onEvent.t=setTimeout(loadLog,600)}
+  if(page()=='programs'&&t.startsWith('program_')&&editing===null){clearTimeout(onEvent.p);onEvent.p=setTimeout(loadProgs,600)}}
+// log entry (API) -> text
 function logText(e){const z=e.zone?zn(e):'',p=e.program!=null?pn(e.program):'',d=e.duration_s||0;switch(e.action){
-  case 'boot':return 'Opgestart'+(d?' – kleppen stonden open bij reboot':'');
-  case 'zone_opened':return `${z} open voor ${fmt(d)} · ${e.source}`;
-  case 'zone_closed':return `${z} dicht na ${fmt(d)} · ${W(e.reason)}`;
-  case 'command_rejected':return `Geweigerd: ${z} – ${W(e.reason)} · ${e.source}`;
-  case 'max_runtime_reached':return `${z}: max looptijd bereikt`;
-  case 'emergency_stop':return `NOODSTOP · ${e.source}`;
-  case 'program_started':return `${p} gestart · ${e.source}`;
-  case 'program_finished':return `${p} ${e.reason=='klaar'?'klaar':'gestopt ('+W(e.reason)+')'} na ${fmt(d)}`;
-  case 'program_skipped':return `${p} overgeslagen – ${W(e.reason)}`;
-  case 'mode_changed':return `Modus → ${e.reason} · ${e.source}`;
-  case 'skip_set':return e.reason=='opgeheven'?'Regenpauze opgeheven':e.reason=='overgeslagen'?'Volgende run overslaan':`Regenpauze ${Math.round(d/3600)} uur · ${e.source}`;
+  case 'boot':return 'Booted'+(d?' – valves were open at reboot':'');
+  case 'zone_opened':return `${z} open for ${fmt(d)} · ${e.source}`;
+  case 'zone_closed':return `${z} closed after ${fmt(d)} · ${W(e.reason)}`;
+  case 'command_rejected':return `Rejected: ${z} – ${W(e.reason)} · ${e.source}`;
+  case 'max_runtime_reached':return `${z}: max runtime reached`;
+  case 'emergency_stop':return `EMERGENCY STOP · ${e.source}`;
+  case 'program_started':return `${p} started · ${e.source}`;
+  case 'program_finished':return `${p} ${e.reason=='done'?'done':'stopped ('+W(e.reason)+')'} after ${fmt(d)}`;
+  case 'program_skipped':return `${p} skipped – ${W(e.reason)}`;
+  case 'mode_changed':return `Mode → ${e.reason} · ${e.source}`;
+  case 'skip_set':return e.reason=='cleared'?'Rain delay cleared':e.reason=='skipped'?'Skip next run':`Rain delay ${Math.round(d/3600)} h · ${e.source}`;
   default:return e.action}}
 async function loadLog(){let rows;try{rows=await api('/log?limit=200')}catch(_){return}
   if(!progs.length)try{progs=await api('/programs')}catch(_){}
-  $('#log').innerHTML=rows.length?rows.map(e=>`<li><time>${e.time?e.time.slice(8,10)+'-'+e.time.slice(5,7)+' '+e.time.slice(11,16):'–'}</time>${esc(logText(e))}</li>`).join(''):'<li class="mute">Nog niets gelogd.</li>'}
+  $('#log').innerHTML=rows.length?rows.map(e=>`<li><time>${e.time?e.time.slice(8,10)+'-'+e.time.slice(5,7)+' '+e.time.slice(11,16):'–'}</time>${esc(logText(e))}</li>`).join(''):'<li class="mute">Nothing logged yet.</li>'}
 
-// ---------- programma's ----------
-const DAYS=['ma','di','wo','do','vr','za','zo'];
-function schedText(p){const when=p.every_days?(p.every_days==1?'Elke dag':`Elke ${p.every_days} dagen`):
-  (p.days.length==7?'Elke dag':p.days.join(' '));return when+' om '+p.starts.join(', ')}
+// ---------- programs ----------
+const DAYS=['mon','tue','wed','thu','fri','sat','sun'];
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+function schedText(p){const when=p.every_days?(p.every_days==1?'Every day':`Every ${p.every_days} days`):
+  (p.days.length==7?'Every day':p.days.map(cap).join(' '));return when+' at '+p.starts.join(', ')}
 async function loadProgs(){try{progs=await api('/programs')}catch(_){return}
   $('#new-prog').disabled=progs.length>=8;
   $('#progs').innerHTML=progs.length?progs.map(p=>`<div class="card prog${p.enabled?'':' off'}">
-    <div class="row"><h3>${esc(p.name)}</h3>${p.running?'<span class="badge open">loopt</span>':p.enabled?'':'<span class="badge">uit</span>'}</div>
-    <dl class="kv"><dt>Wanneer</dt><dd>${schedText(p)}</dd>
-    <dt>Stappen</dt><dd>${p.steps.map(s=>esc(zn(s))+' '+fmt(s.duration_s)).join(' → ')||'<span class="mute">geen</span>'}</dd>
-    <dt>Totaal</dt><dd>${fmt(p.total_s)} <small>(met factor)</small></dd>
-    <dt>Volgende</dt><dd>${p.next_run?dayLabel(p.next_run):'<span class="mute">–</span>'}</dd></dl>
-    <div class="row"><button class="p" onclick="runProg(${p.id})"${p.steps.length?'':' disabled'}>Start nu</button><button onclick="editProg(${p.id})">Bewerken</button></div></div>`).join('')
-    :'<div class="card mute">Nog geen programma\'s. Maak er een met "Nieuw programma".</div>'}
-async function runProg(id){try{await api('/programs/'+id+'/run','POST');toast('Gestart (of in wachtrij)')}catch(_){}}
+    <div class="row"><h3>${esc(p.name)}</h3>${p.running?'<span class="badge open">running</span>':p.enabled?'':'<span class="badge">off</span>'}</div>
+    <dl class="kv"><dt>When</dt><dd>${schedText(p)}</dd>
+    <dt>Steps</dt><dd>${p.steps.map(s=>esc(zn(s))+' '+fmt(s.duration_s)).join(' → ')||'<span class="mute">none</span>'}</dd>
+    <dt>Total</dt><dd>${fmt(p.total_s)} <small>(with factor)</small></dd>
+    <dt>Next</dt><dd>${p.next_run?dayLabel(p.next_run):'<span class="mute">–</span>'}</dd></dl>
+    <div class="row"><button class="p" onclick="runProg(${p.id})"${p.steps.length?'':' disabled'}>Start now</button><button onclick="editProg(${p.id})">Edit</button></div></div>`).join('')
+    :'<div class="card mute">No programs yet. Create one with "New program".</div>'}
+async function runProg(id){try{await api('/programs/'+id+'/run','POST');toast('Started (or queued)')}catch(_){}}
 function zoneOptions(sel){return (status?status.zones:[]).map(z=>`<option value="${z.id}"${z.id==sel?' selected':''}>${z.id}. ${esc(z.name)}</option>`).join('')}
-function startRow(v){const d=document.createElement('span');d.className='row';d.innerHTML=`<input type="time" required value="${v||'06:00'}"><button type="button" title="Verwijderen" onclick="this.parentNode.remove();edUi()">×</button>`;$('#ed-starts').appendChild(d);edUi()}
+function startRow(v){const d=document.createElement('span');d.className='row';d.innerHTML=`<input type="time" required value="${v||'06:00'}"><button type="button" title="Remove" onclick="this.parentNode.remove();edUi()">×</button>`;$('#ed-starts').appendChild(d);edUi()}
 function stepRow(s){const d=document.createElement('div');d.className='row';
-  d.innerHTML=`<select>${zoneOptions(s?s.zone:1)}</select><input type="number" min="1" max="240" required value="${s?Math.round(s.duration_s/60):10}"><span class="mute">min</span><button type="button" title="Verwijderen" onclick="this.parentNode.remove();edUi()">×</button>`;
+  d.innerHTML=`<select>${zoneOptions(s?s.zone:1)}</select><input type="number" min="1" max="240" required value="${s?Math.round(s.duration_s/60):10}"><span class="mute">min</span><button type="button" title="Remove" onclick="this.parentNode.remove();edUi()">×</button>`;
   $('#ed-steps').appendChild(d);edUi()}
 const addStart=()=>startRow('20:00'),addStep=()=>stepRow();
 function edUi(){$('#ed-add-start').disabled=$('#ed-starts').children.length>=4;$('#ed-add-step').disabled=$('#ed-steps').children.length>=10}
@@ -365,10 +366,10 @@ function setKind(k){document.querySelectorAll('#ed-kind button').forEach(b=>b.cl
   $('#ed-days').classList.toggle('hide',k!='days');$('#ed-every').classList.toggle('hide',k!='every')}
 document.querySelectorAll('#ed-kind button').forEach(b=>b.onclick=()=>setKind(b.dataset.k));
 async function editProg(id){const p=id?progs.find(x=>x.id==id):{name:'',enabled:true,starts:['06:00'],days:DAYS,every_days:0,steps:[]};
-  editing=id;$('#ed-title').textContent=id?'Bewerken: '+p.name:'Nieuw programma';$('#ed-del').classList.toggle('hide',!id);
+  editing=id;$('#ed-title').textContent=id?'Edit: '+p.name:'New program';$('#ed-del').classList.toggle('hide',!id);
   $('#ed-name').value=p.name;$('#ed-enabled').checked=p.enabled;
   $('#ed-starts').innerHTML='';p.starts.forEach(startRow);
-  $('#ed-days').innerHTML=DAYS.map(d=>`<label><input type="checkbox" value="${d}"${p.days.includes(d)?' checked':''}><span>${d}</span></label>`).join('');
+  $('#ed-days').innerHTML=DAYS.map(d=>`<label><input type="checkbox" value="${d}"${p.days.includes(d)?' checked':''}><span>${cap(d)}</span></label>`).join('');
   $('#ed-n').value=p.every_days||2;$('#ed-from').value=p.from||new Date().toISOString().slice(0,10);setKind(p.every_days?'every':'days');
   $('#ed-steps').innerHTML='';p.steps.forEach(stepRow);if(!p.steps.length)stepRow();
   try{$('#ed-pause').textContent=(await api('/settings')).zone_pause_s}catch(_){}
@@ -380,60 +381,60 @@ async function saveProg(e){e.preventDefault();const every=$('#ed-every').classLi
     days:[...$('#ed-days').querySelectorAll('input:checked')].map(i=>i.value),every_days:every,
     steps:[...$('#ed-steps').children].map(r=>({zone:+r.querySelector('select').value,duration_s:Math.round(r.querySelector('input').value*60)}))};
   if(every)body.from=$('#ed-from').value;
-  try{await api(editing?'/programs/'+editing:'/programs',editing?'PUT':'POST',body);toast('Programma opgeslagen');closeEditor();loadProgs()}catch(_){}}
-async function delProg(){if(!confirm('Programma verwijderen?'))return;
-  try{await api('/programs/'+editing,'DELETE');toast('Verwijderd');closeEditor();loadProgs()}catch(_){}}
+  try{await api(editing?'/programs/'+editing:'/programs',editing?'PUT':'POST',body);toast('Program saved');closeEditor();loadProgs()}catch(_){}}
+async function delProg(){if(!confirm('Delete program?'))return;
+  try{await api('/programs/'+editing,'DELETE');toast('Deleted');closeEditor();loadProgs()}catch(_){}}
 
 // ---------- zones ----------
 async function loadZones(){try{zonesCfg=await api('/zones')}catch(_){return}
   $('#zone-forms').innerHTML=zonesCfg.map(z=>`<form class="card" onsubmit="saveZone(event,${z.id})">
     <div class="row"><h2 class="grow" style="margin:0">Zone ${z.id}</h2><span class="pin mute"><small>Pin <b>${z.pin}</b> → <b>IN${z.relay}</b></small></span></div>
-    <label for="zn${z.id}">Naam</label><input id="zn${z.id}" class="w" maxlength="23" required value="${esc(z.name)}">
-    <div class="row"><div><label for="zt${z.id}">Type</label><select id="zt${z.id}"><option value="gazon"${z.type=='gazon'?' selected':''}>Gazon</option><option value="border"${z.type=='border'?' selected':''}>Border / heg</option></select></div>
-    <div><label for="zd${z.id}">Standaardduur</label><input id="zd${z.id}" type="number" min="1" max="240" value="${Math.round(z.default_duration_s/60)}"> <span class="mute">min</span></div>
-    <div><label for="zm${z.id}">Max looptijd</label><input id="zm${z.id}" type="number" min="1" max="240" value="${Math.round(z.max_runtime_s/60)}"> <span class="mute">min</span></div></div>
-    <label class="row" style="font-weight:400"><input id="ze${z.id}" type="checkbox"${z.enabled?' checked':''}> Ingeschakeld</label>
-    <p class="mute" style="margin:4px 0"><small>Gelopen: deze week ${fmt(z.runtime.week_s)} · dit seizoen ${fmt(z.runtime.season_s)} · totaal ${fmt(z.runtime.total_s)}</small></p>
-    <div class="row" style="margin-top:8px"><button class="p">Opslaan</button></div></form>`).join('')}
+    <label for="zn${z.id}">Name</label><input id="zn${z.id}" class="w" maxlength="23" required value="${esc(z.name)}">
+    <div class="row"><div><label for="zt${z.id}">Type</label><select id="zt${z.id}"><option value="lawn"${z.type=='lawn'?' selected':''}>Lawn</option><option value="border"${z.type=='border'?' selected':''}>Border / hedge</option></select></div>
+    <div><label for="zd${z.id}">Default duration</label><input id="zd${z.id}" type="number" min="1" max="240" value="${Math.round(z.default_duration_s/60)}"> <span class="mute">min</span></div>
+    <div><label for="zm${z.id}">Max runtime</label><input id="zm${z.id}" type="number" min="1" max="240" value="${Math.round(z.max_runtime_s/60)}"> <span class="mute">min</span></div></div>
+    <label class="row" style="font-weight:400"><input id="ze${z.id}" type="checkbox"${z.enabled?' checked':''}> Enabled</label>
+    <p class="mute" style="margin:4px 0"><small>Run time: this week ${fmt(z.runtime.week_s)} · this season ${fmt(z.runtime.season_s)} · total ${fmt(z.runtime.total_s)}</small></p>
+    <div class="row" style="margin-top:8px"><button class="p">Save</button></div></form>`).join('')}
 async function saveZone(e,id){e.preventDefault();
   const body={name:$('#zn'+id).value.trim(),type:$('#zt'+id).value,enabled:$('#ze'+id).checked,
     default_duration_s:Math.round($('#zd'+id).value*60),max_runtime_s:Math.round($('#zm'+id).value*60)};
-  try{await api('/zones/'+id,'PUT',body);toast('Zone '+id+' opgeslagen')}catch(_){}}
+  try{await api('/zones/'+id,'PUT',body);toast('Zone '+id+' saved')}catch(_){}}
 
-// ---------- instellingen ----------
+// ---------- settings ----------
 function slider(id,v){const el=$('#'+id);if(v!=null)el.value=v;$('#'+id+'-v').textContent=el.value+' %'}
-['f-season','f-gazon','f-border'].forEach(id=>$('#'+id).addEventListener('input',()=>slider(id)));
+['f-season','f-lawn','f-border'].forEach(id=>$('#'+id).addEventListener('input',()=>slider(id)));
 async function saveFactors(e){e.preventDefault();try{await api('/settings','PUT',{season_factor:+$('#f-season').value,
-  factor_gazon:+$('#f-gazon').value,factor_border:+$('#f-border').value,zone_pause_s:+$('#f-pause').value});toast('Opgeslagen')}catch(_){}}
-async function saveTz(e){e.preventDefault();try{await api('/settings','PUT',{timezone:$('#tz').value.trim()});toast('Tijdzone opgeslagen')}catch(_){}}
+  factor_lawn:+$('#f-lawn').value,factor_border:+$('#f-border').value,zone_pause_s:+$('#f-pause').value});toast('Saved')}catch(_){}}
+async function saveTz(e){e.preventDefault();try{await api('/settings','PUT',{timezone:$('#tz').value.trim()});toast('Time zone saved')}catch(_){}}
 async function loadSettings(){try{const s=await api('/settings');$('#mc').value=s.max_concurrent;$('#sg').value=s.stagger_ms;
-  slider('f-season',s.season_factor);slider('f-gazon',s.factor_gazon);slider('f-border',s.factor_border);$('#f-pause').value=s.zone_pause_s;
-  $('#tz').value=s.timezone;$('#tz-now').textContent=status&&status.time_valid?'Nu: '+status.time+' (via NTP)':'Klok nog niet gezet – wacht op NTP (internet nodig).';
+  slider('f-season',s.season_factor);slider('f-lawn',s.factor_lawn);slider('f-border',s.factor_border);$('#f-pause').value=s.zone_pause_s;
+  $('#tz').value=s.timezone;$('#tz-now').textContent=status&&status.time_valid?'Now: '+status.time+' (via NTP)':'Clock not set yet – waiting for NTP (internet required).';
   $('#pw-warn').classList.toggle('hide',!s.password_default);mcWarn();
-  $('#key-state').innerHTML='Voor Home Assistant en scripts: header <code>X-API-Key</code>. '+(s.api_key_default?'Nu actief: de key uit <code>secrets.h</code>.':'Er is een eigen key ingesteld.')}catch(_){}}
+  $('#key-state').innerHTML='For Home Assistant and scripts: header <code>X-API-Key</code>. '+(s.api_key_default?'Currently active: the key from <code>secrets.h</code>.':'A custom key is set.')}catch(_){}}
 function mcWarn(){$('#mc-warn').classList.toggle('hide',!($('#mc').value>2))}
 $('#mc').addEventListener('input',mcWarn);
 async function saveSafety(e){e.preventDefault();
-  try{await api('/settings','PUT',{max_concurrent:+$('#mc').value,stagger_ms:+$('#sg').value});toast('Opgeslagen')}catch(_){}}
-async function changePw(e){e.preventDefault();if($('#pw1').value!=$('#pw2').value){toast('Nieuwe wachtwoorden zijn niet gelijk');return}
+  try{await api('/settings','PUT',{max_concurrent:+$('#mc').value,stagger_ms:+$('#sg').value});toast('Saved')}catch(_){}}
+async function changePw(e){e.preventDefault();if($('#pw1').value!=$('#pw2').value){toast('New passwords do not match');return}
   try{await api('/settings/password','POST',{current:$('#pw0').value,new:$('#pw1').value});
-    ['#pw0','#pw1','#pw2'].forEach(s=>$(s).value='');toast('Wachtwoord gewijzigd');loadSettings()}catch(_){}}
-async function newKey(){if(!confirm('Nieuwe API-key maken? De huidige key (ook in Home Assistant) werkt daarna niet meer.'))return;
+    ['#pw0','#pw1','#pw2'].forEach(s=>$(s).value='');toast('Password changed');loadSettings()}catch(_){}}
+async function newKey(){if(!confirm('Create a new API key? The current key (also in Home Assistant) will stop working.'))return;
   try{const r=await api('/settings/api-key','POST');$('#key-val').textContent=r.api_key;$('#key-new').classList.remove('hide');loadSettings()}catch(_){}}
-function copyKey(){navigator.clipboard.writeText($('#key-val').textContent).then(()=>toast('Gekopieerd'),()=>toast('Kopiëren lukt niet; selecteer de tekst handmatig'))}
+function copyKey(){navigator.clipboard.writeText($('#key-val').textContent).then(()=>toast('Copied'),()=>toast('Copy failed; select the text manually'))}
 
-// ---------- systeem ----------
+// ---------- system ----------
 async function loadInfo(){try{const i=await api('/info');const up=i.uptime_s;
-  const rows=[['Firmware','v'+i.version],['IP-adres',i.ip],['Hostname',i.hostname+'.local'],['WiFi-signaal',i.rssi+' dBm'],
-    ['Tijd',status&&status.time_valid?status.time:'nog niet gezet (NTP)'],['Uptime',Math.floor(up/86400)+' d '+Math.floor(up%86400/3600)+' u '+Math.floor(up%3600/60)+' min'],
-    ['Vrij geheugen',(i.heap_free/1024).toFixed(1)+' KB (fragmentatie '+i.heap_frag+' %)'],['Laatste herstart',i.reset_reason],['Chip-id',i.chip_id]];
+  const rows=[['Firmware','v'+i.version],['IP address',i.ip],['Hostname',i.hostname+'.local'],['WiFi signal',i.rssi+' dBm'],
+    ['Time',status&&status.time_valid?status.time:'not set yet (NTP)'],['Uptime',Math.floor(up/86400)+' d '+Math.floor(up%86400/3600)+' h '+Math.floor(up%3600/60)+' min'],
+    ['Free memory',(i.heap_free/1024).toFixed(1)+' KB (fragmentation '+i.heap_frag+' %)'],['Last restart',i.reset_reason],['Chip ID',i.chip_id]];
   $('#info').innerHTML=rows.map(r=>`<tr><td class="k">${r[0]}</td><td>${esc(r[1])}</td></tr>`).join('')}catch(_){}}
 async function restore(inp){const f=inp.files[0];inp.value='';if(!f)return;let body;
-  try{body=JSON.parse(await f.text())}catch(_){toast('Geen geldig JSON-bestand');return}
-  if(!confirm('Zones en instellingen overschrijven met deze backup?'))return;
-  try{await api('/restore','POST',body);toast('Backup teruggezet')}catch(_){}}
-async function reboot(){if(!confirm('sqwrtr herstarten? Alle kleppen gaan dicht.'))return;
-  try{await api('/reboot','POST');toast('Herstarten… opnieuw inloggen over ±20 s');setTimeout(showLogin,1500)}catch(_){}}
+  try{body=JSON.parse(await f.text())}catch(_){toast('Not a valid JSON file');return}
+  if(!confirm('Overwrite zones and settings with this backup?'))return;
+  try{await api('/restore','POST',body);toast('Backup restored')}catch(_){}}
+async function reboot(){if(!confirm('Restart sqwrtr? All valves will close.'))return;
+  try{await api('/reboot','POST');toast('Restarting… log in again in ±20 s');setTimeout(showLogin,1500)}catch(_){}}
 
 // ---------- start ----------
 async function start(){try{status=await api('/status')}catch(_){return}

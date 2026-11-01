@@ -6,7 +6,7 @@
 namespace auth {
 
 static const uint8_t MAX_SESSIONS = 4;
-static const uint8_t TOKEN_LEN = 32;  // hex-tekens
+static const uint8_t TOKEN_LEN = 32;  // hex characters
 static const uint32_t SESSION_TTL_MS = 7UL * 24 * 3600 * 1000;
 
 struct Session {
@@ -15,7 +15,7 @@ struct Session {
 };
 static Session sessions[MAX_SESSIONS];
 
-// Vergelijking zonder vroegtijdig stoppen (geen timing-lek).
+// Comparison without early exit (no timing leak).
 static bool safeEquals(const char* a, const char* b) {
     size_t la = strlen(a), lb = strlen(b);
     uint8_t diff = la != lb;
@@ -37,7 +37,7 @@ static Session* findSession(const char* token) {
     return nullptr;
 }
 
-// Zoekt de waarde van onze cookie in de Cookie-header.
+// Finds the value of our cookie in the Cookie header.
 static bool cookieToken(AsyncWebServerRequest* req, char* out, size_t outLen) {
     if (!req->hasHeader("Cookie")) return false;
     const String& cookies = req->header("Cookie");
@@ -92,14 +92,14 @@ void endAllSessions() {
 }
 
 String createSession() {
-    // Vrije plek, anders de oudste overschrijven.
+    // Free slot, otherwise overwrite the oldest.
     Session* slot = &sessions[0];
     for (Session& s : sessions) {
         if (!s.token[0]) { slot = &s; break; }
         if (s.lastUsed < slot->lastUsed) slot = &s;
     }
     for (uint8_t i = 0; i < TOKEN_LEN; i += 8) {
-        snprintf(slot->token + i, 9, "%08x", (unsigned)ESP.random());  // hardware-RNG
+        snprintf(slot->token + i, 9, "%08x", (unsigned)ESP.random());  // hardware RNG
     }
     slot->lastUsed = millis();
     return String(COOKIE_NAME) + "=" + slot->token + "; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800";

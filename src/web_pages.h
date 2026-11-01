@@ -1,8 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
-// Pagina's in PROGMEM. Bewust klein en zonder frameworks (RAM is krap).
-// Alleen het herstelpad /update; de web-UI zelf staat in web/index.html (gzip, zie tools/build_web.py).
+// Pages in PROGMEM. Deliberately small and framework-free (RAM is tight).
+// Only the recovery path /update; the web UI itself lives in web/index.html (gzipped, see tools/build_web.py).
 
 static const char SQ_STYLE[] PROGMEM = R"css(
 <meta name=viewport content="width=device-width,initial-scale=1">
@@ -24,7 +24,7 @@ table{border-collapse:collapse;width:100%;margin:10px 0}td,th{text-align:left;pa
 td:first-child{font-family:ui-monospace,monospace;font-weight:700}summary{cursor:pointer}
 </style>)css";
 
-// Gedeeld: inloggen, API-aanroep, melding.
+// Shared: login, API call, message toast.
 static const char SQ_SCRIPT[] PROGMEM = R"js(
 <script>
 const $=s=>document.querySelector(s);
@@ -33,7 +33,7 @@ async function api(path,method='GET',body){
   const r=await fetch('/api'+path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
   if(r.status==401&&path!='/login'){showLogin();throw new Error('login')}
   const j=await r.json().catch(()=>({}));
-  if(!r.ok){msg(j.message||('Fout '+r.status));throw new Error(j.error)}
+  if(!r.ok){msg(j.message||('Error '+r.status));throw new Error(j.error)}
   return j}
 function showLogin(){$('#login').style.display='block';$('#app').style.display='none'}
 async function doLogin(e){e.preventDefault();
@@ -43,31 +43,31 @@ async function logout(){await api('/logout','POST').catch(()=>{});showLogin()}
 
 static const char SQ_LOGIN[] PROGMEM = R"html(
 <form id=login class=card style=display:none onsubmit=doLogin(event)>
-<p><b>Inloggen</b></p><div class=row><input id=pw class=grow type=password placeholder="Admin-wachtwoord" autocomplete=current-password required><button class=p>Inloggen</button></div></form>
+<p><b>Log in</b></p><div class=row><input id=pw class=grow type=password placeholder="Admin password" autocomplete=current-password required><button class=p>Log in</button></div></form>
 <div id=msg></div>)html";
 
-static const char UPDATE_TOP[] PROGMEM = "<!doctype html><html lang=nl><head><meta charset=utf-8><title>sqwrtr update</title>";
-static const char UPDATE_MID[] PROGMEM = "</head><body><main><h1>Firmware-update</h1><small id=info>&nbsp;</small>";
+static const char UPDATE_TOP[] PROGMEM = "<!doctype html><html lang=en><head><meta charset=utf-8><title>sqwrtr update</title>";
+static const char UPDATE_MID[] PROGMEM = "</head><body><main><h1>Firmware update</h1><small id=info>&nbsp;</small>";
 static const char UPDATE_BODY[] PROGMEM = R"html(
 <div id=app style=display:none>
 <div class=card><p><b>Firmware</b> <small>(.pio/build/…/firmware.bin)</small></p>
-<div class=row><input type=file id=fw accept=.bin class=grow><button class=p onclick="up('fw')">Uploaden</button></div></div>
-<div class=card><p><b>Bestandssysteem</b> <small>(littlefs.bin)</small></p>
-<div class=row><input type=file id=fs accept=.bin class=grow><button class=p onclick="up('fs')">Uploaden</button></div></div>
-<div class=card><progress id=pr max=100 value=0 style=width:100%></progress><p id=st class=mute>Alleen mogelijk als alle kleppen dicht zijn.</p></div>
-<p class=mute><a href=/>Terug</a></p></div></main>)html";
+<div class=row><input type=file id=fw accept=.bin class=grow><button class=p onclick="up('fw')">Upload</button></div></div>
+<div class=card><p><b>File system</b> <small>(littlefs.bin)</small></p>
+<div class=row><input type=file id=fs accept=.bin class=grow><button class=p onclick="up('fs')">Upload</button></div></div>
+<div class=card><progress id=pr max=100 value=0 style=width:100%></progress><p id=st class=mute>Only possible while all valves are closed.</p></div>
+<p class=mute><a href=/>Back</a></p></div></main>)html";
 static const char UPDATE_JS[] PROGMEM = R"js(<script>
-function up(type){const f=$('#'+type).files[0];if(!f){msg('Kies eerst een bestand');return}
+function up(type){const f=$('#'+type).files[0];if(!f){msg('Choose a file first');return}
   const fd=new FormData();fd.append('file',f,f.name);const x=new XMLHttpRequest();
-  x.upload.onprogress=e=>{$('#pr').value=e.loaded/e.total*100;$('#st').textContent='Uploaden… '+Math.round(e.loaded/e.total*100)+'%'};
+  x.upload.onprogress=e=>{$('#pr').value=e.loaded/e.total*100;$('#st').textContent='Uploading… '+Math.round(e.loaded/e.total*100)+'%'};
   x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(_){}
-    if(x.status==200){$('#st').textContent='Geslaagd, herstarten… pagina laadt over 15 s opnieuw.';setTimeout(()=>location.href='/',15000)}
-    else if(x.status==401)showLogin();else{$('#st').textContent='Mislukt: '+(j.message||x.status);$('#pr').value=0}};
-  x.onerror=()=>{$('#st').textContent='Verbinding verbroken'};
+    if(x.status==200){$('#st').textContent='Success, restarting… page reloads in 15 s.';setTimeout(()=>location.href='/',15000)}
+    else if(x.status==401)showLogin();else{$('#st').textContent='Failed: '+(j.message||x.status);$('#pr').value=0}};
+  x.onerror=()=>{$('#st').textContent='Connection lost'};
   x.open('POST','/update?type='+type);x.send(fd)}
-async function start(){try{const i=await api('/info');$('#info').textContent='Huidige versie v'+i.version}catch(_){return}$('#app').style.display='block'}
+async function start(){try{const i=await api('/info');$('#info').textContent='Current version v'+i.version}catch(_){return}$('#app').style.display='block'}
 start();
 </script></body></html>)js";
 
-// Een pagina = reeks PROGMEM-blokken, achter elkaar verstuurd (gedeelde blokken staan maar één keer in flash).
+// A page = a sequence of PROGMEM blocks sent back to back (shared blocks are stored only once in flash).
 static const char* const UPDATE_PAGE[] = {UPDATE_TOP, SQ_STYLE, UPDATE_MID, SQ_LOGIN, UPDATE_BODY, SQ_SCRIPT, UPDATE_JS};

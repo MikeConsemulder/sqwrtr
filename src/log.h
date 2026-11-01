@@ -1,8 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
-// Serieel loggen. Zonder testconsole draait Serial TX-only (RX vrij voor flowmeter).
-// Zet LOG_ENABLED op 0 om loggen helemaal uit te schakelen.
+// Serial logging. Without the test console, Serial runs TX-only (RX free for the flow meter).
+// Set LOG_ENABLED to 0 to disable logging entirely.
 #ifndef LOG_ENABLED
 #define LOG_ENABLED 1
 #endif

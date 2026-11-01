@@ -3,24 +3,24 @@
 
 namespace relays {
 
-// Zet alle relaispinnen veilig uit: eerst HIGH schrijven, dan pas OUTPUT.
-// Mag meerdere keren aangeroepen worden (ook vanuit preinit()).
+// Puts all relay pins safely off: write HIGH first, only then set OUTPUT.
+// May be called multiple times (also from preinit()).
 void safeInit();
 
-// Leest uit RTC-geheugen welke kleppen open stonden vóór de reboot en wist dat.
-// Aanroepen in setup(), na safeInit().
+// Reads from RTC memory which valves were open before the reboot, then clears it.
+// Call in setup(), after safeInit().
 void begin();
 
-// Bitmasker (bit 0 = zone 1) van kleppen die open stonden vóór de reboot.
+// Bitmask (bit 0 = zone 1) of valves that were open before the reboot.
 uint8_t previousMask();
 
-// Zone-relais (0-based) aan/uit. Alleen via de zone-manager gebruiken.
+// Zone relay (0-based) on/off. Only use via the zone manager.
 void setZone(uint8_t zone, bool on);
 
-// Bitmasker van de kleppen die nu open staan.
+// Bitmask of the valves that are open right now.
 uint8_t mask();
 
-// Alle kleppen (en hoofdklep) direct dicht.
+// Close all valves (and the master valve) immediately.
 void allOff();
 
 }  // namespace relays

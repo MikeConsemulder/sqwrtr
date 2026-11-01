@@ -6,7 +6,7 @@
 
 namespace button {
 
-static bool stable = false;    // gedebouncede toestand (true = ingedrukt)
+static bool stable = false;    // debounced state (true = pressed)
 static bool lastRaw = false;
 static uint32_t rawChangedAt = 0;
 static uint32_t pressedAt = 0;
@@ -37,12 +37,12 @@ void loop() {
     const uint32_t held = now - pressedAt;
     if (!estopDone && held >= BUTTON_ESTOP_MS) {
         estopDone = true;
-        LOG("Knop: noodstop");
-        zones::emergencyStop(zones::Source::Knop);
+        LOG("Button: emergency stop");
+        zones::emergencyStop(zones::Source::Button);
     }
     if (!apDone && held >= BUTTON_AP_MS) {
         apDone = true;
-        LOG("Knop: AP-modus");
+        LOG("Button: AP mode");
         net::startApManual();
     }
 }

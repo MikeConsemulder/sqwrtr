@@ -1,8 +1,8 @@
 #pragma once
 
-// HTTP-server op poort 80: REST-API (/api), testpagina (/) en het
-// herstelpad /update. Alle pagina's staan in de firmware (PROGMEM), niet in
-// LittleFS, zodat /update altijd werkt.
+// HTTP server on port 80: REST API (/api), web UI (/) and the
+// /update recovery path. All pages live in the firmware (PROGMEM), not in
+// LittleFS, so /update always works.
 namespace web {
 
 void begin();
@@ -10,14 +10,14 @@ void loop();
 
 bool updateInProgress();
 
-// Herstart na korte vertraging, zodat het HTTP-antwoord nog verstuurd wordt.
+// Restart after a short delay, so the HTTP response still gets sent.
 void scheduleRestart();
 
-// WebSocket /ws: event doorsturen naar verbonden clients (detail = JSON-object).
-// Elk event markeert ook de status als gewijzigd → status-push volgt.
+// WebSocket /ws: forward an event to connected clients (detail = JSON object).
+// Every event also marks the status as changed → a status push follows.
 void pushEvent(const char* type, const char* detailJson);
 
-// Status opnieuw pushen zonder event (bijv. na wijzigen van een zonenaam).
+// Push the status again without an event (e.g. after renaming a zone).
 void markStatusDirty();
 
 }  // namespace web

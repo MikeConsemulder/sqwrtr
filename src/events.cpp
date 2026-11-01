@@ -15,7 +15,7 @@ void emit(const char* type, const char* detailFmt, ...) {
     }
     LOG("EVENT %s %s", type, detail);
     web::pushEvent(type, detail);
-    // TODO fase 6: ook naar MQTT
+    // TODO phase 6: also send to MQTT
 }
 
 }  // namespace events

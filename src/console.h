@@ -1,7 +1,7 @@
 #pragma once
 
-// Serieel testconsole (via `pio device monitor`). Gebruikt RX (GPIO3):
-// uitzetten met -DCONSOLE_ENABLED=0 zodra de flowmeter op RX komt.
+// Serial test console (via `pio device monitor`). Uses RX (GPIO3):
+// disable with -DCONSOLE_ENABLED=0 once the flow meter is connected to RX.
 #ifndef CONSOLE_ENABLED
 #define CONSOLE_ENABLED 1
 #endif

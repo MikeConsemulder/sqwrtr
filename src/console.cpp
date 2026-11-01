@@ -15,29 +15,29 @@ static uint8_t len = 0;
 static const char* stateName(zones::State s) {
     switch (s) {
         case zones::State::Open: return "OPEN";
-        case zones::State::Pending: return "wacht";
-        default: return "dicht";
+        case zones::State::Pending: return "wait";
+        default: return "closed";
     }
 }
 
 static void printStatus() {
-    Serial.printf_P(PSTR("Uptime %lu s, heap %u, WiFi %s, AP %s, relais 0x%02x\n"),
-                    millis() / 1000, ESP.getFreeHeap(), net::wifiConnected() ? "ja" : "nee",
-                    net::apActive() ? "aan" : "uit", relays::mask());
+    Serial.printf_P(PSTR("Uptime %lu s, heap %u, WiFi %s, AP %s, relays 0x%02x\n"),
+                    millis() / 1000, ESP.getFreeHeap(), net::wifiConnected() ? "yes" : "no",
+                    net::apActive() ? "on" : "off", relays::mask());
     for (uint8_t i = 0; i < ZONE_COUNT; i++) {
-        Serial.printf_P(PSTR("  %u %-12s %-5s nog %lu s\n"), i + 1, zones::config(i).name,
+        Serial.printf_P(PSTR("  %u %-12s %-6s left %lu s\n"), i + 1, zones::config(i).name,
                         stateName(zones::state(i)), (unsigned long)zones::remainingS(i));
     }
 }
 
 static void printHelp() {
-    Serial.print(F("Commando's:\n"
-                   "  status            zones en systeem\n"
-                   "  open <n> [sec]    zone n openen (zonder sec: onbepaald, max looptijd)\n"
-                   "  close <n>         zone n sluiten\n"
-                   "  stop              noodstop\n"
-                   "  ap                fallback-AP aanzetten\n"
-                   "  reboot            herstarten\n"));
+    Serial.print(F("Commands:\n"
+                   "  status            zones and system\n"
+                   "  open <n> [sec]    open zone n (without sec: indefinite, max runtime)\n"
+                   "  close <n>         close zone n\n"
+                   "  stop              emergency stop\n"
+                   "  ap                turn on fallback AP\n"
+                   "  reboot            restart\n"));
 }
 
 static void handle(char* cmd) {
@@ -55,13 +55,13 @@ static void handle(char* cmd) {
         Serial.printf_P(PSTR("open: %s\n"), zones::resultName(r));
     } else if (!strcmp(verb, "close") && a1) {
         bool ok = zones::close(atoi(a1) - 1, zones::Source::Console);
-        Serial.println(ok ? F("close: ok") : F("close: zone was al dicht"));
+        Serial.println(ok ? F("close: ok") : F("close: zone was already closed"));
     } else if (!strcmp(verb, "stop")) {
         zones::emergencyStop(zones::Source::Console);
     } else if (!strcmp(verb, "ap")) {
         net::startApManual();
     } else if (!strcmp(verb, "reboot")) {
-        Serial.println(F("Herstarten..."));
+        Serial.println(F("Restarting..."));
         Serial.flush();
         ESP.restart();
     } else {

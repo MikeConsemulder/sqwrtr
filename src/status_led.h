@@ -4,10 +4,10 @@
 namespace status_led {
 
 enum class Pattern : uint8_t {
-    Off,        // alles ok / rust
-    SlowBlink,  // geen WiFi
-    FastBlink,  // AP-modus
-    On,         // klep open
+    Off,        // all ok / idle
+    SlowBlink,  // no WiFi
+    FastBlink,  // AP mode
+    On,         // valve open
 };
 
 void begin();

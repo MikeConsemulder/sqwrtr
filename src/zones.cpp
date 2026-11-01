@@ -10,10 +10,10 @@ namespace zones {
 struct Run {
     State state;
     Source src;
-    bool capped;         // looptijd begrensd door maxRuntimeS (onbepaald of te lang gevraagd)
-    uint32_t seq;        // volgorde van aanvragen, voor de wachtende zones
-    uint32_t openedAt;   // millis() bij openen relais
-    uint32_t runMs;      // totale looptijd vanaf openedAt
+    bool capped;         // runtime capped by maxRuntimeS (indefinite or requested too long)
+    uint32_t seq;        // request order, for the pending zones
+    uint32_t openedAt;   // millis() when the relay opened
+    uint32_t runMs;      // total runtime from openedAt
 };
 
 static Config cfg[ZONE_COUNT];
@@ -26,7 +26,7 @@ static bool locked = false;
 static std::function<void()> stopHook;
 
 static void reject(uint8_t zone, Result r, Source src) {
-    events::emit("command_rejected", "{\"zone\":%u,\"reden\":\"%s\",\"bron\":\"%s\"}",
+    events::emit("command_rejected", "{\"zone\":%u,\"reason\":\"%s\",\"source\":\"%s\"}",
                  zone + 1, resultName(r), sourceName(src));
     history::add(history::Action::Rejected, zone + 1, 0, 0, (uint8_t)src, resultName(r));
 }
@@ -36,12 +36,12 @@ static void finish(uint8_t zone, Source src, const char* reason) {
     if (r.state == State::Open) {
         relays::setZone(zone, false);
         uint32_t secs = (millis() - r.openedAt) / 1000;
-        events::emit("zone_closed", "{\"zone\":%u,\"duur_s\":%lu,\"reden\":\"%s\",\"bron\":\"%s\"}",
+        events::emit("zone_closed", "{\"zone\":%u,\"duration_s\":%lu,\"reason\":\"%s\",\"source\":\"%s\"}",
                      zone + 1, (unsigned long)secs, reason, sourceName(src));
         history::add(history::Action::ZoneClosed, zone + 1, 0, secs, (uint8_t)src, reason);
         history::addRuntime(zone, secs);
     } else if (r.state == State::Pending) {
-        events::emit("zone_closed", "{\"zone\":%u,\"duur_s\":0,\"reden\":\"%s\",\"bron\":\"%s\"}",
+        events::emit("zone_closed", "{\"zone\":%u,\"duration_s\":0,\"reason\":\"%s\",\"source\":\"%s\"}",
                      zone + 1, reason, sourceName(src));
     }
     r.state = State::Closed;
@@ -50,7 +50,7 @@ static void finish(uint8_t zone, Source src, const char* reason) {
 void begin() {
     for (uint8_t i = 0; i < ZONE_COUNT; i++) {
         snprintf(cfg[i].name, sizeof(cfg[i].name), "Zone %u", i + 1);
-        cfg[i].type = Type::Gazon;
+        cfg[i].type = Type::Lawn;
         cfg[i].enabled = true;
         cfg[i].defaultDurationS = DEFAULT_DURATION_S;
         cfg[i].maxRuntimeS = DEFAULT_MAX_RUNTIME_S;
@@ -77,13 +77,13 @@ Result open(uint8_t zone, uint32_t durationS, Source src) {
     Run& r = runs[zone];
 
     if (r.state == State::Open) {
-        // Looptijd aanpassen, gerekend vanaf nu, maar nooit voorbij max looptijd.
+        // Adjust the runtime, counted from now, but never beyond the max runtime.
         uint32_t elapsed = millis() - r.openedAt;
         uint32_t total = durationS == 0 ? maxMs : elapsed + wantMs;
         r.capped = total >= maxMs;
         r.runMs = r.capped ? maxMs : total;
         r.src = src;
-        LOG("Zone %u: looptijd aangepast, nog %lu s", zone + 1, (unsigned long)remainingS(zone));
+        LOG("Zone %u: runtime adjusted, %lu s left", zone + 1, (unsigned long)remainingS(zone));
         return Result::Ok;
     }
 
@@ -111,11 +111,11 @@ void closeAll(Source src, const char* reason) {
 }
 
 void emergencyStop(Source src) {
-    relays::allOff();  // eerst fysiek dicht, dan pas administratie
-    closeAll(src, "noodstop");
-    events::emit("emergency_stop", "{\"bron\":\"%s\"}", sourceName(src));
-    history::add(history::Action::EmergencyStop, 0, 0, 0, (uint8_t)src, "noodstop");
-    if (stopHook) stopHook();  // lopende programma's en wachtrij afbreken
+    relays::allOff();  // physically closed first, bookkeeping second
+    closeAll(src, "emergency_stop");
+    events::emit("emergency_stop", "{\"source\":\"%s\"}", sourceName(src));
+    history::add(history::Action::EmergencyStop, 0, 0, 0, (uint8_t)src, "emergency_stop");
+    if (stopHook) stopHook();  // abort running programs and the queue
 }
 
 void setLocked(bool l) { locked = l; }
@@ -124,21 +124,21 @@ void setStopHook(std::function<void()> hook) { stopHook = hook; }
 void loop() {
     const uint32_t now = millis();
 
-    // Verlopen looptijden
+    // Expired runtimes
     for (uint8_t i = 0; i < ZONE_COUNT; i++) {
         Run& r = runs[i];
         if (r.state != State::Open || now - r.openedAt < r.runMs) continue;
         if (r.capped) {
             events::emit("max_runtime_reached", "{\"zone\":%u,\"max_s\":%lu}",
                          i + 1, (unsigned long)cfg[i].maxRuntimeS);
-            history::add(history::Action::MaxRuntime, i + 1, 0, cfg[i].maxRuntimeS, (uint8_t)Source::System, "max_looptijd");
-            finish(i, Source::System, "max_looptijd");
+            history::add(history::Action::MaxRuntime, i + 1, 0, cfg[i].maxRuntimeS, (uint8_t)Source::System, "max_runtime");
+            finish(i, Source::System, "max_runtime");
         } else {
             finish(i, Source::System, "timer");
         }
     }
 
-    // Wachtende zones openen, één per keer met stagger ertussen (inschakelstroom)
+    // Open pending zones one at a time, with stagger in between (inrush current)
     if (switchedOn && now - lastSwitchOn < globalSettings.staggerMs) return;
     int8_t first = -1;
     for (uint8_t i = 0; i < ZONE_COUNT; i++) {
@@ -152,7 +152,7 @@ void loop() {
     r.openedAt = now;
     lastSwitchOn = now;
     switchedOn = true;
-    events::emit("zone_opened", "{\"zone\":%u,\"duur_s\":%lu,\"onbepaald\":%s,\"bron\":\"%s\"}",
+    events::emit("zone_opened", "{\"zone\":%u,\"duration_s\":%lu,\"indefinite\":%s,\"source\":\"%s\"}",
                  first + 1, (unsigned long)(r.runMs / 1000), r.capped ? "true" : "false",
                  sourceName(r.src));
     history::add(history::Action::ZoneOpened, first + 1, 0, r.runMs / 1000, (uint8_t)r.src, "");
@@ -185,19 +185,19 @@ const char* sourceName(Source s) {
         case Source::Web: return "web";
         case Source::Api: return "api";
         case Source::Mqtt: return "mqtt";
-        case Source::Schema: return "schema";
-        case Source::Knop: return "knop";
+        case Source::Schedule: return "schedule";
+        case Source::Button: return "button";
         case Source::Console: return "console";
-        default: return "systeem";
+        default: return "system";
     }
 }
 
 const char* resultName(Result r) {
     switch (r) {
         case Result::Ok: return "ok";
-        case Result::InvalidZone: return "ongeldige_zone";
-        case Result::Disabled: return "uitgeschakeld";
-        case Result::LimitReached: return "limiet";
+        case Result::InvalidZone: return "invalid_zone";
+        case Result::Disabled: return "disabled";
+        case Result::LimitReached: return "limit";
         case Result::Locked: return "winter";
     }
     return "?";

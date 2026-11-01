@@ -1,20 +1,20 @@
-// Kopieer naar include/secrets.h en vul in. secrets.h staat in .gitignore.
+// Copy to include/secrets.h and fill in. secrets.h is in .gitignore.
 #pragma once
 
-#define WIFI_SSID        "mijn-wifi"
-#define WIFI_PASSWORD    "wifi-wachtwoord"
+#define WIFI_SSID        "my-wifi"
+#define WIFI_PASSWORD    "wifi-password"
 
-// Wachtwoord voor ArduinoOTA (zelfde waarde in env-var SQWRTR_OTA_PASS)
-#define OTA_PASSWORD     "ota-wachtwoord"
+// Password for ArduinoOTA (same value as the SQWRTR_OTA_PASS env var)
+#define OTA_PASSWORD     "ota-password"
 
-// Fallback access point "sqwrtr-setup" (min. 8 tekens)
-#define AP_PASSWORD      "setup-wachtwoord"
+// Fallback access point "sqwrtr-setup" (min. 8 characters)
+#define AP_PASSWORD      "setup-password"
 
-// Standaardwaarden; later wijzigbaar via web-UI
-#define ADMIN_PASSWORD   "admin-wachtwoord"
-#define API_KEY          "verander-mij"
+// Defaults; can be changed later via the web UI
+#define ADMIN_PASSWORD   "admin-password"
+#define API_KEY          "change-me"
 
 #define MQTT_HOST        "homeassistant.local"
 #define MQTT_PORT        1883
 #define MQTT_USER        "sqwrtr"
-#define MQTT_PASSWORD    "mqtt-wachtwoord"
+#define MQTT_PASSWORD    "mqtt-password"

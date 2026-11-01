@@ -1,6 +1,6 @@
-// sqwrtr – fase 5: programma's, NTP, wachtrij, factor, overslaan, logboek
-// Veilige pin-init, WiFi + fallback-AP, mDNS, ArduinoOTA, zone-manager met
-// veiligheidsregels, FLASH-knop, status-LED, serieel testconsole en webserver.
+// sqwrtr – phase 5: programs, NTP, queue, factor, skip, log
+// Safe pin init, WiFi + fallback AP, mDNS, ArduinoOTA, zone manager with
+// safety rules, FLASH button, status LED, serial test console and web server.
 
 #include <Arduino.h>
 #include "config.h"
@@ -18,7 +18,7 @@
 #include "console.h"
 #include "status_led.h"
 
-// Zo vroeg mogelijk in de boot (vóór setup) de relais veilig uit zetten.
+// Switch the relays safely off as early in the boot as possible (before setup).
 extern "C" void preinit() {
     relays::safeInit();
 }
@@ -30,13 +30,13 @@ static void emitBootEvent() {
     for (uint8_t i = 0; i < ZONE_COUNT; i++) {
         if (prev & (1 << i)) n += snprintf(list + n, sizeof(list) - n, "%s%u", n ? "," : "", i + 1);
     }
-    events::emit("boot", "{\"versie\":\"%s\",\"reset_reden\":\"%s\",\"kleppen_open_bij_reboot\":[%s]}",
+    events::emit("boot", "{\"version\":\"%s\",\"reset_reason\":\"%s\",\"valves_open_at_reboot\":[%s]}",
                  FW_VERSION, ESP.getResetReason().c_str(), list);
-    if (prev) LOG("LET OP: kleppen %s stonden open bij reboot – nu dicht", list);
+    if (prev) LOG("WARNING: valves %s were open at reboot – now closed", list);
 }
 
 void setup() {
-    relays::safeInit();  // nogmaals, voor de zekerheid
+    relays::safeInit();  // once more, to be safe
     relays::begin();
     status_led::begin();
     button::begin();
@@ -44,25 +44,25 @@ void setup() {
 #if CONSOLE_ENABLED
     Serial.begin(115200);
 #else
-    Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);  // RX vrij voor flowmeter
+    Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);  // RX free for the flow meter
 #endif
     Serial.println();
-    LOG("sqwrtr v%s – chip-id %06x, vrij heap %u", FW_VERSION, ESP.getChipId(), ESP.getFreeHeap());
+    LOG("sqwrtr v%s – chip id %06x, free heap %u", FW_VERSION, ESP.getChipId(), ESP.getFreeHeap());
     emitBootEvent();
 
-    // Software-watchdog expliciet aan; hardware-watchdog staat altijd aan.
+    // Software watchdog explicitly on; the hardware watchdog is always on.
     ESP.wdtEnable(WDTO_8S);
 
     zones::begin();
     programs::begin();
-    storage::begin();  // overschrijft standaardwaarden met opgeslagen config (ook tijdzone)
+    storage::begin();  // overrides defaults with the saved config (including time zone)
     history::begin();
     history::add(history::Action::Boot, 0, 0, relays::previousMask(), (uint8_t)zones::Source::System, "");
     ntp::begin();
     net::begin({
-        []() { return zones::activeCount() == 0 && !web::updateInProgress(); },  // geen OTA met open kleppen
+        []() { return zones::activeCount() == 0 && !web::updateInProgress(); },  // no OTA with open valves
         []() {
-            programs::abortAll("afgebroken");
+            programs::abortAll("aborted");
             zones::closeAll(zones::Source::System, "ota");
             relays::allOff();
             storage::flush();
