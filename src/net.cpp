@@ -67,6 +67,8 @@ void begin(const OtaHooks& ota) {
 
     WiFi.persistent(false);  // no flash writes on every connect
     WiFi.mode(WIFI_STA);
+    // Modem sleep makes the ESP miss ARP requests (unreachable while associated), notably on mesh networks.
+    WiFi.setSleepMode(WIFI_NONE_SLEEP);
     WiFi.hostname(HOSTNAME);
     WiFi.setAutoReconnect(true);
 
@@ -76,10 +78,17 @@ void begin(const OtaHooks& ota) {
         LOG("WiFi: connected, IP %s, RSSI %d dBm", e.ip.toString().c_str(), WiFi.RSSI());
     });
     disconnectHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected& e) {
+        static uint8_t lastReason = 0;
+        static uint32_t lastLog = 0;
         if (connected) {
             lostSince = millis();
             LOG("WiFi: connection lost (reason %u)", e.reason);
+        } else if (e.reason != lastReason || millis() - lastLog >= 30000) {
+            // Failed connect attempts: log the reason, but not on every retry.
+            LOG("WiFi: connect failed (reason %u)", e.reason);
+            lastLog = millis();
         }
+        lastReason = e.reason;
         connected = false;
     });
 
@@ -98,6 +107,17 @@ void loop() {
     uint32_t now = millis();
 
     if (!servicesStarted && (connected || ap)) startServices();
+
+    // The SDK's auto-reconnect gives up after some failures (e.g. reason 203, association refused by a
+    // mesh node), so restart the connect attempt ourselves.
+    static uint32_t lastRetry = 0;
+    if (!connected && now - lostSince >= WIFI_RETRY_MS && now - lastRetry >= WIFI_RETRY_MS &&
+        WiFi.status() != WL_CONNECTED) {
+        lastRetry = now;
+        LOG("WiFi: retrying connect");
+        WiFi.disconnect(false);
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    }
 
     if (!connected && !ap && now - lostSince >= WIFI_AP_FALLBACK_MS) startAp("no_wifi");
     if (connected && ap && now - connectedSince >= WIFI_AP_LINGER_MS &&

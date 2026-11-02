@@ -1,5 +1,6 @@
 #include "console.h"
 #include <Arduino.h>
+#include <ESP8266WiFi.h>
 #include "config.h"
 #include "zones.h"
 #include "net.h"
@@ -36,6 +37,7 @@ static void printHelp() {
                    "  open <n> [sec]    open zone n (without sec: indefinite, max runtime)\n"
                    "  close <n>         close zone n\n"
                    "  stop              emergency stop\n"
+                   "  wifi              Wi-Fi status and scan\n"
                    "  ap                turn on fallback AP\n"
                    "  reboot            restart\n"));
 }
@@ -58,6 +60,15 @@ static void handle(char* cmd) {
         Serial.println(ok ? F("close: ok") : F("close: zone was already closed"));
     } else if (!strcmp(verb, "stop")) {
         zones::emergencyStop(zones::Source::Console);
+    } else if (!strcmp(verb, "wifi")) {
+        Serial.printf_P(PSTR("Status %d, BSSID %s, channel %d, RSSI %d dBm, IP %s\nScanning...\n"), WiFi.status(),
+                        WiFi.BSSIDstr().c_str(), WiFi.channel(), WiFi.RSSI(), WiFi.localIP().toString().c_str());
+        int n = WiFi.scanNetworks();  // blocks ~2 s; console is for testing only
+        for (int i = 0; i < n; i++) {
+            Serial.printf_P(PSTR("  %-24s %s ch %2d %4d dBm enc %u\n"), WiFi.SSID(i).c_str(), WiFi.BSSIDstr(i).c_str(),
+                            WiFi.channel(i), WiFi.RSSI(i), WiFi.encryptionType(i));
+        }
+        WiFi.scanDelete();
     } else if (!strcmp(verb, "ap")) {
         net::startApManual();
     } else if (!strcmp(verb, "reboot")) {

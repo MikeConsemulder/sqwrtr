@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 - README, CONTRIBUTING, CHANGELOG and MIT license for the open-source release.
+- Serial console command `wifi` (status + network scan); failed Wi-Fi connects are logged with their reason.
+
+### Fixed
+- Wi-Fi never reconnected after the access point refused an association (reason 203, seen on mesh networks):
+  the firmware now restarts the connect attempt every 20 s while offline.
+- Wi-Fi modem sleep disabled, so the device keeps answering ARP/ping.
 
 ## [0.5.0] – Programs
 - NTP time with configurable POSIX time zone.

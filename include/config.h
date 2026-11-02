@@ -25,6 +25,7 @@ static const uint8_t PIN_LED          = 2;   // D4 – onboard blue LED (active 
 static const char HOSTNAME[]         = "sqwrtr";
 static const char AP_SSID[]          = "sqwrtr-setup";
 static const uint32_t WIFI_AP_FALLBACK_MS = 5UL * 60 * 1000;  // 5 min without WiFi → AP
+static const uint32_t WIFI_RETRY_MS = 20000;                    // restart connect attempt while offline
 static const uint32_t WIFI_AP_LINGER_MS   = 60UL * 1000;      // keep AP up 1 more min after reconnecting
 static const uint32_t WIFI_AP_MANUAL_MS   = 15UL * 60 * 1000; // AP via button: at least 15 min
 
