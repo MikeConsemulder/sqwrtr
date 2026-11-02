@@ -1,0 +1,204 @@
+# sqwrtr – Home Assistant dashboard
+#
+# Install: Settings → Dashboards → Add dashboard → "New dashboard from scratch",
+# open it, ⋮ → Edit dashboard → ⋮ → Raw configuration editor, paste this file.
+#
+# Uses the fixed entity ids from sqwrtr's MQTT discovery (valve.sqwrtr_zone1, ...)
+# and the helpers from packages/sqwrtr.yaml. Remove zone rows you don't use.
+
+title: sqwrtr
+views:
+  - title: Garden
+    path: garden
+    icon: mdi:sprinkler-variant
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: tile
+            entity: button.sqwrtr_stop
+            name: Emergency stop
+            color: red
+            icon_tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.sqwrtr_stop
+              confirmation:
+                text: Close all valves and abort programs?
+          - type: entities
+            title: Status
+            entities:
+              - entity: select.sqwrtr_mode
+              - entity: sensor.sqwrtr_program
+              - entity: sensor.sqwrtr_queue
+              - entity: sensor.sqwrtr_next_run
+              - entity: binary_sensor.sqwrtr_skip
+              - type: attribute
+                entity: binary_sensor.sqwrtr_skip
+                attribute: reason
+                name: Skip reason
+              - type: attribute
+                entity: binary_sensor.sqwrtr_skip
+                attribute: until
+                name: Skip until
+          - type: horizontal-stack
+            cards:
+              - type: button
+                entity: button.sqwrtr_skip_next
+                name: Skip next
+                icon: mdi:skip-next
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.sqwrtr_skip_next
+              - type: button
+                entity: button.sqwrtr_clear_skip
+                name: Clear skip
+                icon: mdi:weather-sunny
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.sqwrtr_clear_skip
+              - type: button
+                entity: button.sqwrtr_test
+                name: Test cycle
+                icon: mdi:playlist-play
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.sqwrtr_test
+                  confirmation:
+                    text: Run each enabled zone for 1 minute?
+
+      - type: entities
+        title: Zones
+        state_color: true
+        entities:
+          - entity: valve.sqwrtr_zone1
+          - entity: number.sqwrtr_zone1_duration
+          - entity: sensor.sqwrtr_zone1_remaining
+          - type: divider
+          - entity: valve.sqwrtr_zone2
+          - entity: number.sqwrtr_zone2_duration
+          - entity: sensor.sqwrtr_zone2_remaining
+          - type: divider
+          - entity: valve.sqwrtr_zone3
+          - entity: number.sqwrtr_zone3_duration
+          - entity: sensor.sqwrtr_zone3_remaining
+          - type: divider
+          - entity: valve.sqwrtr_zone4
+          - entity: number.sqwrtr_zone4_duration
+          - entity: sensor.sqwrtr_zone4_remaining
+          - type: divider
+          - entity: valve.sqwrtr_zone5
+          - entity: number.sqwrtr_zone5_duration
+          - entity: sensor.sqwrtr_zone5_remaining
+
+      # One "Run ..." button per program (program1 = program id 1). Keep only the ones you have.
+      - type: entities
+        title: Programs
+        entities:
+          - entity: button.sqwrtr_program1
+          - entity: button.sqwrtr_program2
+
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Weather
+            entities:
+              - entity: input_boolean.sqwrtr_weather_auto
+                name: Weather control
+              - entity: sensor.sqwrtr_rain_last_24h
+                name: Rain last 24 h
+              - entity: sensor.sqwrtr_rain_next_24h
+                name: Rain next 24 h
+              - entity: sensor.sqwrtr_et0
+                name: Evaporation (ET₀, 4-day avg)
+              - entity: sensor.sqwrtr_max_temperature_today
+                name: Max temperature today
+              - entity: sensor.sqwrtr_suggested_factor
+                name: Suggested season factor
+              - entity: number.sqwrtr_season_factor
+                name: Season factor (active)
+          - type: history-graph
+            title: Season factor & rain
+            hours_to_show: 336
+            entities:
+              - entity: number.sqwrtr_season_factor
+                name: Factor
+              - entity: sensor.sqwrtr_rain_last_24h
+                name: Rain 24 h
+
+  - title: Settings
+    path: settings
+    icon: mdi:cog-outline
+    cards:
+      - type: entities
+        title: Weather logic
+        entities:
+          - entity: input_datetime.sqwrtr_weather_check
+            name: Check daily at
+          - entity: input_number.sqwrtr_rain_skip_past
+            name: Skip if rain last 24 h above
+          - entity: input_number.sqwrtr_rain_skip_forecast
+            name: Skip if rain next 24 h above
+          - entity: input_number.sqwrtr_skip_hours
+            name: Skip for
+          - type: divider
+          - entity: input_number.sqwrtr_et0_reference
+            name: ET₀ that means 100 %
+          - entity: input_number.sqwrtr_factor_min
+            name: Factor minimum
+          - entity: input_number.sqwrtr_factor_max
+            name: Factor maximum
+          - entity: input_number.sqwrtr_hot_temp
+            name: Hot day from
+          - entity: input_number.sqwrtr_hot_bonus
+            name: Hot day extra
+      - type: entities
+        title: Zone type factors
+        entities:
+          - entity: number.sqwrtr_factor_lawn
+            name: Lawn
+          - entity: number.sqwrtr_factor_border
+            name: Border / hedge
+      - type: entities
+        title: Notifications
+        entities:
+          - entity: input_text.sqwrtr_notify_service
+            name: Notify action (e.g. notify.mobile_app_phone)
+          - entity: input_boolean.sqwrtr_notify_problems
+            name: Problems & offline
+          - entity: input_boolean.sqwrtr_notify_weather
+            name: Weather skips
+          - entity: input_boolean.sqwrtr_notify_programs
+            name: Program start / end
+          - entity: input_text.sqwrtr_device_id
+            name: Device id
+      - type: entities
+        title: Maintenance
+        entities:
+          - entity: select.sqwrtr_mode
+            name: Mode (winter = everything off)
+          - entity: button.sqwrtr_test
+          - entity: sensor.sqwrtr_rssi
+          - entity: sensor.sqwrtr_uptime
+      - type: entities
+        title: Runtime this week
+        entities:
+          - sensor.sqwrtr_zone1_week
+          - sensor.sqwrtr_zone2_week
+          - sensor.sqwrtr_zone3_week
+          - sensor.sqwrtr_zone4_week
+          - sensor.sqwrtr_zone5_week
+      - type: entities
+        title: Runtime this season
+        entities:
+          - sensor.sqwrtr_zone1_season
+          - sensor.sqwrtr_zone2_season
+          - sensor.sqwrtr_zone3_season
+          - sensor.sqwrtr_zone4_season
+          - sensor.sqwrtr_zone5_season

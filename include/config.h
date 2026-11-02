@@ -25,7 +25,10 @@ static const uint8_t PIN_LED          = 2;   // D4 – onboard blue LED (active 
 static const char HOSTNAME[]         = "sqwrtr";
 static const char AP_SSID[]          = "sqwrtr-setup";
 static const uint32_t WIFI_AP_FALLBACK_MS = 5UL * 60 * 1000;  // 5 min without WiFi → AP
-static const uint32_t WIFI_RETRY_MS = 20000;                    // restart connect attempt while offline
+static const uint32_t WIFI_RETRY_MS = 20000;                    // new connect attempt while offline
+static const uint16_t WIFI_RESET_EVERY = 3;                     // radio off/on every N attempts (~1 min)
+static const uint32_t WIFI_RESTART_MS = 3UL * 60 * 1000;      // still offline → restart (only when idle)
+static const uint8_t WIFI_MAX_RESTARTS = 3;                    // in a row without connecting; then wait for the AP
 static const uint32_t WIFI_AP_LINGER_MS   = 60UL * 1000;      // keep AP up 1 more min after reconnecting
 static const uint32_t WIFI_AP_MANUAL_MS   = 15UL * 60 * 1000; // AP via button: at least 15 min
 
@@ -60,3 +63,5 @@ static const uint32_t BUTTON_AP_MS       = 10000;  // very long press → AP mod
 // ---- RTC memory ----
 // Blocks 0–31 are used by the bootloader (eboot) for OTA; we stay well clear of them.
 static const uint32_t RTC_OFFSET_RELAYS = 64;
+static const uint32_t RTC_OFFSET_CLOCK = 72;   // ntp: time kept across a deliberate restart
+static const uint32_t RTC_OFFSET_NET = 76;     // net: Wi-Fi restart counter

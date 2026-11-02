@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.7.0] – Home Assistant package
+
+### Added
+- `homeassistant/packages/sqwrtr.yaml`: Open-Meteo weather (rain last/next 24 h, ET₀, max temperature), daily weather
+  check that sets the season factor from evaporation and skips watering on rain, notifications (weather skips,
+  problems, offline, optionally program start/end), all thresholds as helpers.
+- `homeassistant/dashboards/sqwrtr.yaml`: ready-made dashboard.
+- Fixed entity ids via `default_entity_id` in MQTT discovery (`valve.sqwrtr_zone1`, `select.sqwrtr_mode`, …).
+
 ## [0.6.0] – MQTT + Home Assistant
 
 ### Added
@@ -28,8 +37,10 @@ All notable changes to this project are documented here. The format is based on
 - Serial console command `wifi` (status + network scan); failed Wi-Fi connects are logged with their reason.
 
 ### Fixed
-- Wi-Fi never reconnected after the access point refused an association (reason 203, seen on mesh networks):
-  the firmware now restarts the connect attempt every 20 s while offline.
+- Wi-Fi never reconnected after the access point refused an association (reason 203, seen on mesh networks).
+  Recovery now escalates: every 20 s a new attempt via one of the 3 strongest access points (rotating), a radio reset
+  every 3rd attempt, and after 3 min offline a restart, but only when idle and no program starts within 3 minutes.
+- The clock survives deliberate restarts (Wi-Fi recovery, web UI, console), so schedules keep running without NTP.
 - Wi-Fi modem sleep disabled, so the device keeps answering ARP/ping.
 
 ## [0.5.0] – Programs

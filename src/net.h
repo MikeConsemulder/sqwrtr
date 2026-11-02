@@ -7,6 +7,8 @@ namespace net {
 struct OtaHooks {
     std::function<bool()> allowed;  // false → OTA invitations are ignored
     std::function<void()> onStart;  // right before an OTA update starts
+    std::function<bool()> idle;     // true → a restart now interrupts nothing
+    std::function<void()> beforeRestart;  // save state right before a Wi-Fi recovery restart
 };
 
 // WiFi (STA), fallback AP, mDNS and ArduinoOTA.

@@ -78,7 +78,7 @@ sqwrtr is built in phases. Each phase is compiled, flashed and tested on real ha
 | 4 | Web UI, WebSocket live updates, persistent settings | ✅ done |
 | 5 | Programs: NTP, scheduler, queue, factors, rain delay, modes, log, runtime counters | ✅ done |
 | 6 | MQTT + Home Assistant auto-discovery + events | ✅ done |
-| 7 | Home Assistant package: weather logic (Open-Meteo), notifications, dashboard | 🔜 next |
+| 7 | Home Assistant package: weather logic (Open-Meteo), notifications, dashboard | ✅ done |
 | 8 | Firmware update via HA, flow meter, rain sensor, master valve/pump, more zones | planned |
 
 ## Hardware
@@ -254,7 +254,7 @@ The UI is a single page with six tabs. A green dot top-right means the live conn
 | Power supply overload | Max valves open at once (default 2) and a 500 ms stagger between switch-ons |
 | Firmware update half-way through watering | OTA and `/update` are refused while any valve is open |
 | Frost season | `winter` mode blocks everything except the emergency stop |
-| Lost network | Schedules keep running on local time; after 5 min without Wi‑Fi a fallback AP starts |
+| Lost network | Schedules keep running on local time. The firmware keeps reconnecting (rotating between mesh nodes, resetting the radio) and, after 3 min, restarts itself — only when no valve is open, no program runs and none starts within 3 minutes; the clock survives the restart. After 5 min without Wi‑Fi a fallback AP starts |
 
 ## REST API
 
@@ -442,7 +442,38 @@ automation:
           payload: '{"action":"skip","hours":24,"reason":"rain expected"}'
 ```
 
-Phase 7 will ship this as a ready-made HA package: weather logic based on [Open-Meteo](https://open-meteo.com/) (free, no key) that skips watering after/before rain and adjusts the seasonal factor from evapotranspiration, plus notifications through the HA companion app.
+You don't have to build this yourself: the [Home Assistant package](#home-assistant-package-weather--notifications) below does it for you.
+
+### Home Assistant package (weather + notifications)
+
+[`homeassistant/packages/sqwrtr.yaml`](homeassistant/packages/sqwrtr.yaml) adds weather logic and notifications. The ESP keeps running the schedules; the package only steers. If Home Assistant is down, watering continues with the last values.
+
+**What it does**
+
+- **Weather from [Open-Meteo](https://open-meteo.com/)** (free, no API key) for your HA home location: rain in the last 24 h, rain expected in the next 24 h, reference evaporation (ET₀, average of the last 3 days and today) and today's max temperature.
+- **Daily weather check** (default 05:00, before your morning programs):
+  - sets the **season factor** from evaporation: `ET₀ / reference × 100 %` (reference default 4 mm/day), plus an extra percentage on hot days, rounded to 5 % and clamped between a minimum and maximum (default 30–150 %);
+  - **skips watering** for a number of hours (default 20) when more than 5 mm fell in the last 24 h or more than 3 mm is expected in the next 24 h, with the reason shown in sqwrtr and HA.
+- **Notifications** through the HA companion app (or as HA notifications): weather skips, problems (emergency stop, max runtime reached, rejected scheduled commands, unexpected restart with valves open, failed updates, offline for 5 minutes and back online) and optionally every program start/end.
+- All thresholds are helpers (`input_number`, `input_boolean`, …) you can change on the dashboard. The lawn and border factors stay manual: tune them once on the dashboard (e.g. border 70 %).
+
+**Install**
+
+1. Make sure sqwrtr is connected to MQTT and shows up in HA ([setup](#setup)).
+2. Copy `homeassistant/packages/sqwrtr.yaml` to `/config/packages/sqwrtr.yaml` on your HA machine (File editor or Samba add-on).
+3. Enable packages in `configuration.yaml` if you haven't already:
+   ```yaml
+   homeassistant:
+     packages: !include_dir_named packages
+   ```
+4. Developer tools → YAML → **Check configuration**, then restart Home Assistant. On the first start the defaults are filled in and the device id is learned from MQTT automatically.
+5. Set **sqwrtr notify service** to your phone's notify action, e.g. `notify.mobile_app_pixel_8` (find it under Developer tools → Actions, search `notify.mobile_app`). Until then notifications appear in HA itself.
+
+**Dashboard**
+
+[`homeassistant/dashboards/sqwrtr.yaml`](homeassistant/dashboards/sqwrtr.yaml) is a ready-made dashboard with zones, programs, weather, settings, notifications and runtime counters. Settings → Dashboards → **Add dashboard** → *New dashboard from scratch* → open it → ⋮ → Edit dashboard → ⋮ → **Raw configuration editor** → paste the file. Remove the zone/program rows you don't use.
+
+The dashboard uses the fixed entity ids that sqwrtr sets via discovery (`valve.sqwrtr_zone1`, `select.sqwrtr_mode`, `number.sqwrtr_season_factor`, `button.sqwrtr_program1`, …). If your sqwrtr was added to HA with firmware 0.6.0 (before fixed ids), delete the sqwrtr device once in HA (Settings → Devices → sqwrtr → ⋮ → Delete) and restart sqwrtr; it is then rediscovered with these ids.
 
 ### Without MQTT
 
@@ -510,6 +541,9 @@ sqwrtr/
 │   ├── events.*              # event bus → serial log + WebSocket + MQTT
 │   ├── button.*, status_led.*, console.*
 │   └── web_pages.h           # /update recovery page (PROGMEM)
+├── homeassistant/
+│   ├── packages/sqwrtr.yaml  # HA package: weather logic, season factor, rain skip, notifications
+│   └── dashboards/sqwrtr.yaml  # ready-made HA dashboard
 ├── web/
 │   └── index.html            # the web UI (single file, vanilla JS)
 ├── tools/
@@ -547,6 +581,7 @@ open <n> [sec]    open zone n (without sec: indefinite, capped by max runtime)
 close <n>         close zone n
 stop              emergency stop
 wifi              Wi-Fi status and network scan
+join <bssid> [ch] connect to one specific access point (diagnostics)
 ap                start the fallback AP
 reboot            restart
 ```
@@ -566,7 +601,7 @@ Add a GPIO to `ZONE_PINS` and its board label to `ZONE_PIN_LABELS` in `include/c
 | Programs don't start | Check the clock on **System** (NTP needs internet), the mode (must be `auto`), the rain delay, and that the program is enabled and has steps. |
 | No COM port for USB flashing | Use a data-capable USB cable and install the CH340 driver. |
 | Board doesn't boot with relays connected | Something is connected to D8 (GPIO 15). Move it. |
-| Router shows the board online, but it's unreachable | Usually a mesh node refusing the association after the board moved. The firmware retries every 20 s; check the reason with the `wifi` console command or in the serial log (`connect failed (reason …)`). |
+| Router shows the board online, but it's unreachable | Usually a mesh node refusing the association after the board moved. The firmware recovers by itself within a few minutes; check the reason with the `wifi` console command or in the serial log (`connect failed (reason …)`). Reason 202 on every node: check that the device isn't *bound* to one mesh node (ASUS AiMesh), blocked by a MAC filter, or that the network didn't switch to WPA3-only. |
 | MQTT stays "Not connected" | Use the broker's IP address (not `.local`), check user and password (the error is shown next to the status), and that port 1883 is reachable. |
 | HA entities don't appear | Check that the MQTT integration is set up in HA and that the discovery prefix is `homeassistant`. |
 

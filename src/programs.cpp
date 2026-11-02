@@ -320,6 +320,25 @@ void abortAll(const char* reason) {
     for (Run& r : runs) if (r.used) finish(r, reason);
 }
 
+static time_t nextStart(const Program& p);
+
+bool busy() {
+    for (const Run& r : runs) if (r.used) return true;
+    return false;
+}
+
+time_t nextRun(uint8_t* id) {
+    time_t best = 0;
+    for (uint8_t i = 0; i < MAX_PROGRAMS; i++) {
+        time_t t = nextStart(progs[i]);
+        if (t && (!best || t < best)) {
+            best = t;
+            if (id) *id = i + 1;
+        }
+    }
+    return best;
+}
+
 bool skipActive() { return skipUntil && ntp::valid() && ntp::now() < skipUntil; }
 
 bool setSkipHours(uint32_t hours, const char* reason, zones::Source src) {
@@ -618,15 +637,8 @@ void statusJson(JsonObject o) {
     }
 
     // Next upcoming run across all programs
-    time_t best = 0;
     uint8_t bestId = 0;
-    for (uint8_t i = 0; i < MAX_PROGRAMS; i++) {
-        time_t t = nextStart(progs[i]);
-        if (t && (!best || t < best)) {
-            best = t;
-            bestId = i + 1;
-        }
-    }
+    const time_t best = nextRun(&bestId);
     if (best) {
         JsonObject n = o["next_run"].to<JsonObject>();
         n["program"] = bestId;

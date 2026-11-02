@@ -5,6 +5,8 @@
 #include "zones.h"
 #include "net.h"
 #include "relays.h"
+#include "secrets.h"
+#include "ntp.h"
 
 #if CONSOLE_ENABLED
 
@@ -38,6 +40,7 @@ static void printHelp() {
                    "  close <n>         close zone n\n"
                    "  stop              emergency stop\n"
                    "  wifi              Wi-Fi status and scan\n"
+                   "  join <bssid> [ch] connect to one access point (diagnostics)\n"
                    "  ap                turn on fallback AP\n"
                    "  reboot            restart\n"));
 }
@@ -69,11 +72,23 @@ static void handle(char* cmd) {
                             WiFi.channel(i), WiFi.RSSI(i), WiFi.encryptionType(i));
         }
         WiFi.scanDelete();
+    } else if (!strcmp(verb, "join") && a1) {
+        // Diagnose mesh/AP problems: connect to one specific access point (BSSID from "wifi").
+        uint8_t bssid[6];
+        if (sscanf(a1, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4],
+                   &bssid[5]) != 6) {
+            Serial.println(F("join: BSSID like 62:28:aa:e2:6c:03"));
+        } else {
+            Serial.printf_P(PSTR("Joining %s (channel %d)...\n"), a1, a2 ? atoi(a2) : 0);
+            WiFi.disconnect(false);
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD, a2 ? atoi(a2) : 0, bssid);
+        }
     } else if (!strcmp(verb, "ap")) {
         net::startApManual();
     } else if (!strcmp(verb, "reboot")) {
         Serial.println(F("Restarting..."));
         Serial.flush();
+        ntp::saveForRestart();
         ESP.restart();
     } else {
         printHelp();

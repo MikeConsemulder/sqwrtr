@@ -84,7 +84,11 @@ Relays 7 and 8: spare.
 - The ESP8266 has no automatic rollback → OTA only allowed while no valve is open; self-test after update.
 
 ### Network robustness
-- Wi-Fi lost → keep retrying, schedules keep running on local time.
+- Wi-Fi lost → keep retrying, schedules keep running on local time. Escalation (`src/net.cpp`): every 20 s scan and
+  connect to one of the 3 strongest access points of the SSID (rotating, for mesh nodes that refuse us); every 3rd
+  attempt the radio is switched off/on; after 3 min offline a restart — only when idle (no valve open, no run active
+  or queued, no program start within 3 min, nobody on the fallback AP), at most 3 in a row. The clock survives
+  deliberate restarts via RTC memory (`ntp::saveForRestart`), so schedules don't stop without NTP.
 - 5 min without Wi-Fi → **fallback access point** (`sqwrtr-setup`, with password) while still retrying; web UI reachable there too.
 - MQTT lost → reconnect with backoff; everything keeps working locally.
 
@@ -219,7 +223,7 @@ Later: `leak_detected`, `no_flow` (flow meter), `rain_detected` (rain sensor).
   - Thresholds as `input_number` in HA, configurable.
 - **Notifications (HA companion app)**: errors and safety, ESP offline, program start/end, skipped due to weather (with reason), firmware updates.
 - **Maintenance**: winter mode, test cycle, runtime counters per valve, firmware update via HA.
-- Deliver as an HA **package** (YAML) + dashboard YAML. Possibly a HACS integration later.
+- Delivered as an HA **package** (`homeassistant/packages/sqwrtr.yaml`) + dashboard (`homeassistant/dashboards/sqwrtr.yaml`). Commands go over MQTT (`sqwrtr/<id>/factor/set`, `.../cmd`); the device id is learned from the retained `status` topic. The dashboard relies on the fixed entity ids from `def_ent_id` in discovery. Possibly a HACS integration later.
 
 ---
 
@@ -231,7 +235,7 @@ Later: `leak_detected`, `no_flow` (flow meter), `rain_detected` (rain sensor).
 4. **Web UI** (dashboard, zones, settings, system) + persistent settings. ✅
 5. **Programs**: NTP, scheduler, queue, factor, skip, persistence, log. ✅
 6. **MQTT + HA discovery + events.** ✅
-7. **HA package**: Open-Meteo weather logic, notifications, dashboard, maintenance.
+7. **HA package**: Open-Meteo weather logic, notifications, dashboard, maintenance. ✅
 8. **Later**: firmware update via HA, HACS integration, flow meter (RX), rain sensor (A0), master valve/pump (D0), relays 7–8 / I/O expander, 2nd controller.
 
 Each phase: compile, flash, test on hardware (without 24 V first, using the relay LEDs), only then continue.

@@ -1,0 +1,456 @@
+# sqwrtr – Home Assistant package
+#
+# Weather logic (Open-Meteo, free, no API key), automatic season factor,
+# rain skip and notifications for the sqwrtr irrigation controller.
+#
+# Install:
+#   1. sqwrtr must be connected to MQTT (Settings → MQTT in the sqwrtr web UI).
+#   2. Copy this file to /config/packages/sqwrtr.yaml
+#   3. In configuration.yaml (once):
+#        homeassistant:
+#          packages: !include_dir_named packages
+#   4. Restart Home Assistant. Defaults are set on the first start.
+#   5. Set "sqwrtr notify service" to your phone, e.g. notify.mobile_app_pixel_8
+#      (Developer tools → Actions → search "notify.mobile_app").
+#
+# The location comes from your Home Assistant home zone. The ESP runs the
+# schedules; this package only steers (factor + skip). If HA is down, watering
+# simply continues with the last values.
+
+# ---------------------------------------------------------------------------
+# Settings (all adjustable on the dashboard)
+# ---------------------------------------------------------------------------
+
+input_boolean:
+  sqwrtr_weather_auto:
+    name: sqwrtr weather control
+    icon: mdi:weather-partly-rainy
+  sqwrtr_notify_programs:
+    name: sqwrtr notify program start/end
+    icon: mdi:bell-outline
+  sqwrtr_notify_weather:
+    name: sqwrtr notify weather skips
+    icon: mdi:bell-outline
+  sqwrtr_notify_problems:
+    name: sqwrtr notify problems
+    icon: mdi:bell-alert-outline
+  sqwrtr_initialized:
+    name: sqwrtr package initialized
+    icon: mdi:check
+
+input_text:
+  sqwrtr_device_id:
+    name: sqwrtr device id
+    icon: mdi:identifier
+    max: 23
+  sqwrtr_notify_service:
+    name: sqwrtr notify service
+    icon: mdi:cellphone-message
+    max: 100
+
+input_datetime:
+  sqwrtr_weather_check:
+    name: sqwrtr weather check time
+    has_date: false
+    has_time: true
+
+input_number:
+  sqwrtr_rain_skip_past:
+    name: sqwrtr skip if rain last 24h above
+    min: 0.5
+    max: 30
+    step: 0.5
+    unit_of_measurement: mm
+    icon: mdi:weather-pouring
+  sqwrtr_rain_skip_forecast:
+    name: sqwrtr skip if rain next 24h above
+    min: 0.5
+    max: 30
+    step: 0.5
+    unit_of_measurement: mm
+    icon: mdi:weather-rainy
+  sqwrtr_skip_hours:
+    name: sqwrtr skip duration
+    min: 1
+    max: 72
+    step: 1
+    unit_of_measurement: h
+    icon: mdi:timer-sand
+  sqwrtr_et0_reference:
+    name: sqwrtr ET₀ for 100 %
+    min: 1
+    max: 8
+    step: 0.1
+    unit_of_measurement: mm/d
+    icon: mdi:sun-thermometer-outline
+  sqwrtr_factor_min:
+    name: sqwrtr factor minimum
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:arrow-collapse-down
+  sqwrtr_factor_max:
+    name: sqwrtr factor maximum
+    min: 100
+    max: 200
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:arrow-collapse-up
+  sqwrtr_hot_temp:
+    name: sqwrtr hot day from
+    min: 20
+    max: 40
+    step: 1
+    unit_of_measurement: °C
+    icon: mdi:thermometer-high
+  sqwrtr_hot_bonus:
+    name: sqwrtr hot day extra
+    min: 0
+    max: 50
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:plus-circle-outline
+
+# ---------------------------------------------------------------------------
+# Weather from Open-Meteo (https://open-meteo.com, free, no key)
+# ---------------------------------------------------------------------------
+
+rest:
+  # Rain: last 24 h and next 24 h (hourly sums)
+  - resource_template: >-
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(2) }}&longitude={{ state_attr('zone.home', 'longitude') | round(2) }}&hourly=precipitation&past_hours=24&forecast_hours=24&timezone=auto
+    scan_interval: 1800
+    sensor:
+      - name: sqwrtr rain last 24h
+        unique_id: sqwrtr_rain_last_24h
+        unit_of_measurement: mm
+        device_class: precipitation
+        state_class: measurement
+        icon: mdi:weather-pouring
+        value_template: >-
+          {{ value_json.hourly.precipitation[:24] | map('float', 0) | sum | round(1) }}
+      - name: sqwrtr rain next 24h
+        unique_id: sqwrtr_rain_next_24h
+        unit_of_measurement: mm
+        device_class: precipitation
+        state_class: measurement
+        icon: mdi:weather-rainy
+        value_template: >-
+          {{ value_json.hourly.precipitation[24:] | map('float', 0) | sum | round(1) }}
+
+  # Evaporation (ET₀) and temperature: average of the last 3 days + today
+  - resource_template: >-
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(2) }}&longitude={{ state_attr('zone.home', 'longitude') | round(2) }}&daily=et0_fao_evapotranspiration,temperature_2m_max&past_days=3&forecast_days=1&timezone=auto
+    scan_interval: 3600
+    sensor:
+      - name: sqwrtr ET0
+        unique_id: sqwrtr_et0
+        unit_of_measurement: mm/d
+        state_class: measurement
+        icon: mdi:sun-thermometer-outline
+        value_template: >-
+          {% set v = value_json.daily.et0_fao_evapotranspiration | map('float', 0) | list %}
+          {{ (v | sum / v | length) | round(2) if v else none }}
+      - name: sqwrtr max temperature today
+        unique_id: sqwrtr_max_temperature_today
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        value_template: >-
+          {{ value_json.daily.temperature_2m_max[-1] | float(none) }}
+
+template:
+  - sensor:
+      # The factor the weather check would set right now (shown on the dashboard).
+      - name: sqwrtr suggested factor
+        unique_id: sqwrtr_suggested_factor
+        unit_of_measurement: "%"
+        icon: mdi:percent
+        state: >-
+          {% set et0 = states('sensor.sqwrtr_et0') | float(-1) %}
+          {% if et0 < 0 %}
+            {{ none }}
+          {% else %}
+            {% set f = et0 / (states('input_number.sqwrtr_et0_reference') | float(4)) * 100 %}
+            {% if states('sensor.sqwrtr_max_temperature_today') | float(-99) >= states('input_number.sqwrtr_hot_temp') | float(28) %}
+              {% set f = f + states('input_number.sqwrtr_hot_bonus') | float(0) %}
+            {% endif %}
+            {% set f = (f / 5) | round(0) * 5 %}
+            {% set lo = states('input_number.sqwrtr_factor_min') | float(30) %}
+            {% set hi = states('input_number.sqwrtr_factor_max') | float(150) %}
+            {{ ([lo, [hi, f] | min] | max) | int }}
+          {% endif %}
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+script:
+  sqwrtr_notify:
+    alias: sqwrtr notify
+    mode: queued
+    fields:
+      title:
+        description: Title
+      message:
+        description: Message
+    sequence:
+      - variables:
+          service: "{{ states('input_text.sqwrtr_notify_service') | trim }}"
+      - if:
+          - condition: template
+            value_template: "{{ service.startswith('notify.') }}"
+        then:
+          - action: "{{ service }}"
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+        else:
+          - action: persistent_notification.create
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+
+# ---------------------------------------------------------------------------
+# Automations
+# ---------------------------------------------------------------------------
+
+automation:
+  # Defaults on the very first start (input helpers keep their values after that).
+  - id: sqwrtr_init_defaults
+    alias: "sqwrtr: set defaults"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.sqwrtr_initialized
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_rain_skip_past }
+        data: { value: 5 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_rain_skip_forecast }
+        data: { value: 3 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_skip_hours }
+        data: { value: 20 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_et0_reference }
+        data: { value: 4 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_factor_min }
+        data: { value: 30 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_factor_max }
+        data: { value: 150 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_hot_temp }
+        data: { value: 28 }
+      - action: input_number.set_value
+        target: { entity_id: input_number.sqwrtr_hot_bonus }
+        data: { value: 20 }
+      - action: input_datetime.set_datetime
+        target: { entity_id: input_datetime.sqwrtr_weather_check }
+        data: { time: "05:00:00" }
+      - action: input_text.set_value
+        target: { entity_id: input_text.sqwrtr_notify_service }
+        data: { value: "persistent_notification" }
+      - action: input_boolean.turn_on
+        target:
+          entity_id:
+            - input_boolean.sqwrtr_weather_auto
+            - input_boolean.sqwrtr_notify_weather
+            - input_boolean.sqwrtr_notify_problems
+            - input_boolean.sqwrtr_initialized
+
+  # Learn the device id from sqwrtr's retained "online" message (first controller only).
+  - id: sqwrtr_learn_device_id
+    alias: "sqwrtr: learn device id"
+    mode: single
+    triggers:
+      - trigger: mqtt
+        topic: sqwrtr/+/status
+        payload: online
+    conditions:
+      - condition: template
+        value_template: "{{ states('input_text.sqwrtr_device_id') in ['', 'unknown', 'unavailable'] }}"
+    actions:
+      - action: input_text.set_value
+        target: { entity_id: input_text.sqwrtr_device_id }
+        data:
+          value: "{{ trigger.topic.split('/')[1] }}"
+
+  # Daily before the morning programs: set the season factor and skip on rain.
+  - id: sqwrtr_weather_check
+    alias: "sqwrtr: weather check"
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.sqwrtr_weather_check
+    conditions:
+      - condition: state
+        entity_id: input_boolean.sqwrtr_weather_auto
+        state: "on"
+      - condition: template
+        value_template: "{{ states('input_text.sqwrtr_device_id') not in ['', 'unknown', 'unavailable'] }}"
+    actions:
+      # Fresh weather data first
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.sqwrtr_rain_last_24h
+            - sensor.sqwrtr_et0
+      - delay: { seconds: 15 }
+      - variables:
+          base: "sqwrtr/{{ states('input_text.sqwrtr_device_id') }}"
+          rain_past: "{{ states('sensor.sqwrtr_rain_last_24h') | float(-1) }}"
+          rain_next: "{{ states('sensor.sqwrtr_rain_next_24h') | float(-1) }}"
+          factor: "{{ states('sensor.sqwrtr_suggested_factor') | int(-1) }}"
+          skip_past: "{{ rain_past >= 0 and rain_past > states('input_number.sqwrtr_rain_skip_past') | float(5) }}"
+          skip_next: "{{ rain_next >= 0 and rain_next > states('input_number.sqwrtr_rain_skip_forecast') | float(3) }}"
+          reason: >-
+            {% if skip_past and skip_next %}Rain: {{ rain_past }} mm fallen, {{ rain_next }} mm expected
+            {%- elif skip_past %}Rain: {{ rain_past }} mm in the last 24 h
+            {%- else %}Rain: {{ rain_next }} mm expected in 24 h{% endif %}
+      - if:
+          - condition: template
+            value_template: "{{ factor >= 0 }}"
+        then:
+          - action: mqtt.publish
+            data:
+              topic: "{{ base }}/factor/set"
+              payload: "{{ factor }}"
+      - if:
+          - condition: template
+            value_template: "{{ skip_past or skip_next }}"
+        then:
+          - action: mqtt.publish
+            data:
+              topic: "{{ base }}/cmd"
+              payload: >-
+                {{ {'action': 'skip', 'hours': states('input_number.sqwrtr_skip_hours') | int(20), 'reason': reason[:47]} | tojson }}
+          - if:
+              - condition: state
+                entity_id: input_boolean.sqwrtr_notify_weather
+                state: "on"
+            then:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "💧 sqwrtr: watering skipped"
+                  message: "{{ reason }}. Season factor {{ factor }} %."
+
+  # Events from the controller → phone
+  - id: sqwrtr_event_notifications
+    alias: "sqwrtr: event notifications"
+    mode: queued
+    max: 20
+    triggers:
+      - trigger: mqtt
+        topic: sqwrtr/+/event
+    actions:
+      - variables:
+          e: "{{ trigger.payload_json if trigger.payload_json is defined else {} }}"
+          type: "{{ e.event | default('') }}"
+          programs_on: "{{ is_state('input_boolean.sqwrtr_notify_programs', 'on') }}"
+          problems_on: "{{ is_state('input_boolean.sqwrtr_notify_problems', 'on') }}"
+          minutes: "{{ ((e.duration_s | default(0)) / 60) | round(0) | int }}"
+      - choose:
+          - conditions: "{{ programs_on and type == 'program_started' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "🌱 sqwrtr"
+                  message: "{{ e.name }} started."
+          - conditions: "{{ programs_on and type == 'program_finished' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "🌱 sqwrtr"
+                  message: >-
+                    {{ e.name }} {{ 'finished' if e.reason == 'done' else 'stopped (' ~ e.reason ~ ')' }} after {{ minutes }} min.
+          - conditions: "{{ programs_on and type == 'program_skipped' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "🌱 sqwrtr"
+                  message: "{{ e.name }} skipped ({{ e.reason }})."
+          - conditions: "{{ problems_on and type == 'emergency_stop' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "🛑 sqwrtr: emergency stop"
+                  message: "All valves closed (source: {{ e.source | default('?') }})."
+          - conditions: "{{ problems_on and type == 'max_runtime_reached' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "⚠️ sqwrtr: max runtime"
+                  message: "Zone {{ e.zone }} was closed after its maximum runtime ({{ minutes }} min)."
+          - conditions: "{{ problems_on and type == 'command_rejected' and e.source in ['schedule', 'mqtt'] }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "⚠️ sqwrtr: command rejected"
+                  message: "Zone {{ e.zone }} could not open ({{ e.reason }}, source {{ e.source }})."
+          - conditions: >-
+              {{ problems_on and type == 'boot' and ((e.valves_open_at_reboot | default([]) | length > 0)
+                 or (e.reset_reason | default('')) is search('Watchdog|Exception', ignorecase=true)) }}
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "⚠️ sqwrtr restarted unexpectedly"
+                  message: >-
+                    Reason: {{ e.reset_reason }}.
+                    {%- if e.valves_open_at_reboot | default([]) | length > 0 %} Valves {{ e.valves_open_at_reboot | join(', ') }} were open and are now closed.{% endif %}
+          - conditions: "{{ problems_on and type == 'update_failed' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "⚠️ sqwrtr: firmware update failed"
+                  message: "Error {{ e.error | default('?') }}. The old firmware is still running."
+          - conditions: "{{ problems_on and type == 'update_finished' }}"
+            sequence:
+              - action: script.sqwrtr_notify
+                data:
+                  title: "⬆️ sqwrtr updated"
+                  message: "Firmware update finished; sqwrtr is restarting."
+
+  # Offline for 5 minutes (MQTT last will) → notify, and again when it is back.
+  - id: sqwrtr_offline
+    alias: "sqwrtr: offline"
+    mode: restart
+    triggers:
+      - trigger: mqtt
+        topic: sqwrtr/+/status
+        payload: offline
+    conditions:
+      - condition: state
+        entity_id: input_boolean.sqwrtr_notify_problems
+        state: "on"
+    actions:
+      - wait_for_trigger:
+          - trigger: mqtt
+            topic: sqwrtr/+/status
+            payload: online
+        timeout: { minutes: 5 }
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.trigger }}"
+        then:
+          - action: script.sqwrtr_notify
+            data:
+              title: "📴 sqwrtr offline"
+              message: "No connection for 5 minutes. Schedules keep running on the device."
+          - wait_for_trigger:
+              - trigger: mqtt
+                topic: sqwrtr/+/status
+                payload: online
+          - action: script.sqwrtr_notify
+            data:
+              title: "📶 sqwrtr online"
+              message: "sqwrtr is connected again."

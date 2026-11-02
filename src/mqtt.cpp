@@ -399,6 +399,11 @@ static bool publishDiscovery(uint16_t i) {
     bool keep = buildItem(i, d, component, obj, sizeof(obj));
     snprintf(topic, sizeof(topic), "%s/%s/%s/%s/config", cfg.prefix, component, devId, obj);
     if (!keep) return pub(topic, "", true);
+    // Stable entity ids (valve.sqwrtr_zone1, select.sqwrtr_mode, ...) so the HA package and
+    // dashboard work for everyone. A second controller gets HA's "_2" suffix.
+    char entityId[48];
+    snprintf(entityId, sizeof(entityId), "%s.sqwrtr_%s", component, obj);
+    d["def_ent_id"] = entityId;
     if (measureJson(d) >= sizeof(out)) {
         LOG("MQTT: discovery %s too large", obj);
         return true;  // skip it

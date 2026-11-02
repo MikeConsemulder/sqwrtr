@@ -70,6 +70,11 @@ void setup() {
             storage::flush();
             history::flush();
         },
+        []() { return zones::activeCount() == 0 && !programs::busy() && !web::updateInProgress(); },
+        []() {
+            storage::flush();
+            history::flush();
+        },
     });
     web::begin();
 }

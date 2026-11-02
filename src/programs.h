@@ -51,6 +51,8 @@ bool parseMode(const char* s, Mode& out);
 // ---- runs ----
 RunResult runNow(uint8_t id, zones::Source src);  // id 1-based; 0 = test cycle
 void abortAll(const char* reason);
+bool busy();  // a run is active or queued
+time_t nextRun(uint8_t* id = nullptr);  // next scheduled start (0 = none)
 const char* runResultMessage(RunResult r);
 
 // ---- rain delay / skip ----

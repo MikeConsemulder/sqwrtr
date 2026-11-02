@@ -8,7 +8,11 @@ namespace ntp {
 
 void begin();
 
-bool valid();  // clock set (after the first NTP sync)
+bool valid();  // clock set (NTP sync, or restored after a deliberate restart)
+
+// Store the current time in RTC memory right before ESP.restart(); begin() restores it,
+// so schedules keep running after a restart without Wi-Fi (NTP corrects it later).
+void saveForRestart();
 time_t now();
 bool localNow(struct tm& out);  // false while the clock is not set
 
