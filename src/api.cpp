@@ -11,6 +11,7 @@
 #include "programs.h"
 #include "history.h"
 #include "ntp.h"
+#include "mqtt.h"
 #include "log.h"
 
 namespace api {
@@ -116,6 +117,7 @@ static void getInfo(AsyncWebServerRequest* req) {
     char chip[9];
     snprintf(chip, sizeof(chip), "%06x", ESP.getChipId());
     doc["chip_id"] = chip;
+    doc["mqtt"] = mqtt::stateName();
     sendJson(req, 200, doc);
 }
 
@@ -177,6 +179,7 @@ static void getSettings(AsyncWebServerRequest* req) {
     programs::settingsToJson(doc.as<JsonObject>());
     doc["password_default"] = storage::passwordIsDefault();
     doc["api_key_default"] = storage::apiKeyIsDefault();
+    mqtt::configToJson(doc["mqtt"].to<JsonObject>(), false);
     sendJson(req, 200, doc);
 }
 
@@ -195,9 +198,18 @@ static void putSettings(AsyncWebServerRequest* req) {
     if (!in["timezone"].isNull() && (strlen(tz) < 3 || strlen(tz) > 47)) {
         return sendError(req, 400, "invalid_field", "timezone: POSIX time zone, 3-47 characters");
     }
+    mqtt::Config mc = mqtt::config();
+    if (!in["mqtt"].isNull()) {
+        if (!in["mqtt"].is<JsonObjectConst>()) return sendError(req, 400, "invalid_field", "mqtt: object");
+        if (!mqtt::configFromJson(in["mqtt"], mc, &err)) return sendError(req, 400, "invalid_field", err);
+    }
     zones::settings() = zs;
     programs::settings() = ps;
     if (tz[0]) ntp::setTimezone(tz);
+    if (!in["mqtt"].isNull()) {
+        mqtt::config() = mc;
+        mqtt::applyConfig();
+    }
     storage::markDirty();
     web::markStatusDirty();
     getSettings(req);

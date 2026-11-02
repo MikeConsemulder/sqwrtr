@@ -1,4 +1,4 @@
-// sqwrtr – phase 5: programs, NTP, queue, factor, skip, log
+// sqwrtr – phase 6: MQTT + Home Assistant discovery
 // Safe pin init, WiFi + fallback AP, mDNS, ArduinoOTA, zone manager with
 // safety rules, FLASH button, status LED, serial test console and web server.
 
@@ -11,6 +11,7 @@
 #include "storage.h"
 #include "programs.h"
 #include "history.h"
+#include "mqtt.h"
 #include "ntp.h"
 #include "net.h"
 #include "web.h"
@@ -55,6 +56,7 @@ void setup() {
 
     zones::begin();
     programs::begin();
+    mqtt::begin();     // MQTT defaults from secrets.h, before storage loads the saved config
     storage::begin();  // overrides defaults with the saved config (including time zone)
     history::begin();
     history::add(history::Action::Boot, 0, 0, relays::previousMask(), (uint8_t)zones::Source::System, "");
@@ -75,6 +77,7 @@ void setup() {
 void loop() {
     net::loop();
     web::loop();
+    mqtt::loop();
     zones::loop();
     programs::loop();
     storage::loop();

@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "log.h"
 #include "web.h"
+#include "mqtt.h"
 
 namespace events {
 
@@ -15,7 +16,7 @@ void emit(const char* type, const char* detailFmt, ...) {
     }
     LOG("EVENT %s %s", type, detail);
     web::pushEvent(type, detail);
-    // TODO phase 6: also send to MQTT
+    mqtt::publishEvent(type, detail);
 }
 
 }  // namespace events

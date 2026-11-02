@@ -151,7 +151,7 @@ Base `/api`, JSON. Auth: header `X-API-Key: <key>` (or `Authorization: Bearer <k
 | POST | `/api/skip` | body `{ "hours": 24, "reason": "rain expected" }`; `{ "next": true, "reason": "..." }` skips the next run; `{ "hours": 0 }` clears |
 | PUT | `/api/mode` | `auto` / `manual` / `winter` |
 | POST | `/api/test` | Test cycle |
-| GET / PUT | `/api/settings` | Safety, factors, pause, time zone (MQTT in phase 6) |
+| GET / PUT | `/api/settings` | Safety, factors, pause, time zone, `mqtt` object (password write-only) |
 | POST | `/api/settings/password` | body `{ "current": "...", "new": "..." }` (8–64 characters) |
 | POST | `/api/settings/api-key` | New API key; only visible in this response |
 | GET / POST | `/api/backup`, `/api/restore` | Zones + programs + settings as JSON (without password/API key) |
@@ -195,7 +195,8 @@ Later: `leak_detected`, `no_flow` (flow meter), `rain_detected` (rain sensor).
   - `number` seasonal factor
   - `button`: emergency stop, test cycle, start programs
   - `binary_sensor`: skip active
-  - `update`: firmware
+  - `update`: firmware — deferred to phase 8 (needs the HTTP update flow)
+- Implementation notes (`src/mqtt.cpp`): async client, incoming messages are queued and handled in `loop()`; retained commands are ignored; discovery is sent one item per loop pass (heap); the broker host must be an IP or DNS name (`.local` does not resolve).
 
 ---
 
@@ -229,7 +230,7 @@ Later: `leak_detected`, `no_flow` (flow meter), `rain_detected` (rain sensor).
 3. **REST API + auth + `/update` page** (recovery path). ✅
 4. **Web UI** (dashboard, zones, settings, system) + persistent settings. ✅
 5. **Programs**: NTP, scheduler, queue, factor, skip, persistence, log. ✅
-6. **MQTT + HA discovery + events.**
+6. **MQTT + HA discovery + events.** ✅
 7. **HA package**: Open-Meteo weather logic, notifications, dashboard, maintenance.
 8. **Later**: firmware update via HA, HACS integration, flow meter (RX), rain sensor (A0), master valve/pump (D0), relays 7–8 / I/O expander, 2nd controller.
 

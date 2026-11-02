@@ -60,6 +60,7 @@ bool skipActive();
 
 // ---- program management (id 1-based) ----
 bool exists(uint8_t id);
+const char* name(uint8_t id);  // nullptr if the program doesn't exist
 int8_t freeId();  // 0 if full
 bool fromJson(JsonObjectConst in, Program& out, const char** err);
 void store(uint8_t id, const Program& p);

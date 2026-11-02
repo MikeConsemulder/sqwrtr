@@ -1,6 +1,6 @@
 # sqwrtr
 
-**A self-hosted, stand-alone irrigation controller for ESP8266, with a mobile web UI, a REST API and (soon) Home Assistant integration.**
+**A self-hosted, stand-alone irrigation controller for ESP8266, with a mobile web UI, a REST API and Home Assistant integration via MQTT.**
 
 sqwrtr ("squirter") turns a €5 ESP8266 board and a cheap relay module into a smart sprinkler controller for a manifold of 24 V AC solenoid valves. It runs its own schedules, keeps working when your Wi‑Fi or Home Assistant is down, and puts safety first: valves are closed on boot, runtimes are capped, and the number of valves open at the same time is limited to what your power supply can handle.
 
@@ -37,7 +37,7 @@ sqwrtr ("squirter") turns a €5 ESP8266 board and a cheap relay module into a s
 Commercial smart irrigation controllers are expensive, cloud-dependent and hard to extend. Home Assistant–only setups stop watering when your server reboots. sqwrtr sits in between:
 
 - **The ESP runs the schedules.** Watering continues without Wi‑Fi, without Home Assistant and without the cloud.
-- **Home Assistant steers, it doesn't drive.** HA can adjust a seasonal factor or skip runs based on the weather (planned: [phase 6–7](#project-status)), but if HA is gone, your garden still gets water.
+- **Home Assistant steers, it doesn't drive.** HA can adjust a seasonal factor or skip runs based on the weather (over MQTT; a ready-made weather package follows in [phase 7](#project-status)), but if HA is gone, your garden still gets water.
 - **Everything is local and open.** Web UI, REST API, WebSocket and OTA updates all run on the device itself. No accounts, no apps, no cloud.
 - **Built for cheap, common hardware.** An ESP8266 dev board, an 8-channel relay module, a 24 V AC transformer and a buck converter.
 
@@ -77,8 +77,8 @@ sqwrtr is built in phases. Each phase is compiled, flashed and tested on real ha
 | 3 | REST API, authentication, `/update` recovery page | ✅ done |
 | 4 | Web UI, WebSocket live updates, persistent settings | ✅ done |
 | 5 | Programs: NTP, scheduler, queue, factors, rain delay, modes, log, runtime counters | ✅ done |
-| 6 | MQTT + Home Assistant auto-discovery + events | 🔜 next |
-| 7 | Home Assistant package: weather logic (Open-Meteo), notifications, dashboard | planned |
+| 6 | MQTT + Home Assistant auto-discovery + events | ✅ done |
+| 7 | Home Assistant package: weather logic (Open-Meteo), notifications, dashboard | 🔜 next |
 | 8 | Firmware update via HA, flow meter, rain sensor, master valve/pump, more zones | planned |
 
 ## Hardware
@@ -163,7 +163,7 @@ Edit `include/secrets.h`:
 | `AP_PASSWORD` | Password of the fallback access point `sqwrtr-setup` (min. 8 characters) |
 | `ADMIN_PASSWORD` | Initial web UI password (change it later in the UI) |
 | `API_KEY` | Initial API key (generate a new one later in the UI) |
-| `MQTT_*` | Reserved for phase 6 |
+| `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD` | Initial MQTT broker settings (use an IP address; change later in the UI). Leave `MQTT_HOST` empty to start with MQTT disabled |
 
 `secrets.h` is in `.gitignore` and never committed.
 
@@ -286,7 +286,7 @@ The initial key and password come from `secrets.h`. Generate a new key on **Sett
 | POST | `/api/test` | Start the test cycle |
 | POST | `/api/skip` | `{ "hours": 24, "reason": "rain expected" }` · `{ "next": true, "reason": "..." }` · `{ "hours": 0 }` clears |
 | PUT | `/api/mode` | `{ "mode": "auto" \| "manual" \| "winter" }` |
-| GET / PUT | `/api/settings` | `max_concurrent`, `stagger_ms`, `season_factor`, `factor_lawn`, `factor_border`, `zone_pause_s`, `timezone` |
+| GET / PUT | `/api/settings` | `max_concurrent`, `stagger_ms`, `season_factor`, `factor_lawn`, `factor_border`, `zone_pause_s`, `timezone`, `mqtt` (`enabled`, `host`, `port`, `user`, `password` (write-only), `device_id`, `discovery_prefix`) |
 | POST | `/api/settings/password` | `{ "current": "...", "new": "..." }` (8–64 characters) |
 | POST | `/api/settings/api-key` | Generate a new API key (returned once) |
 | GET | `/api/log?limit=50` | Log entries, newest first (max 200) |
@@ -361,7 +361,92 @@ Connect to `ws://<device>/ws` (same authentication as the API — the session co
 
 ## Home Assistant
 
-Native MQTT integration with auto-discovery is the next phase. Until then you can already use the REST API from Home Assistant, for example:
+sqwrtr talks to Home Assistant over **MQTT with auto-discovery**: once it is connected to your broker, a device **sqwrtr** with all its entities appears in HA automatically — no YAML needed.
+
+### Setup
+
+1. In Home Assistant, install the **Mosquitto broker** add-on (Settings → Add-ons) and start it. The **MQTT** integration is then offered automatically; accept it.
+2. Create a Home Assistant user for sqwrtr (Settings → People → Users, e.g. `sqwrtr`). Mosquitto accepts HA users as MQTT logins.
+3. In the sqwrtr web UI go to **Settings → MQTT / Home Assistant**, enter the broker's **IP address** (the ESP cannot resolve `homeassistant.local`), port `1883`, user and password, and save. The status line turns green when connected. (Alternatively set `MQTT_*` in `secrets.h` before flashing.)
+4. In HA: Settings → Devices & services → MQTT → **sqwrtr**.
+
+The broker password is stored on the device (it has to be, to log in) but is never returned by the API and is not part of the backup download.
+
+### Entities
+
+| Entity | Type | Notes |
+|---|---|---|
+| `<zone name>` (per zone) | `valve` | Open/close; *open* uses the zone's duration below. Shows `opening` while waiting for the stagger delay |
+| `<zone name> duration` (per zone) | `number` (min) | Duration used when opening from HA; same as the zone's default duration in the web UI |
+| `<zone name> remaining` (per zone) | `sensor` (s) | Remaining run time |
+| `<zone name> this week` / `this season` (per zone) | `sensor` (s) | Runtime counters |
+| Mode | `select` | `auto`, `manual`, `winter`, `test` (selecting `test` starts the test cycle) |
+| Season factor, Lawn factor, Border factor | `number` (%) | 0–200 %, scale all program run times |
+| Rain delay | `binary_sensor` | On while a rain delay or "skip next run" is active; attributes: until, reason |
+| Active program, Queue, Next run | `sensor` | |
+| Emergency stop, Test cycle, Skip next run, Clear rain delay | `button` | |
+| Run `<program name>` (per program) | `button` | Added and removed automatically when you create or delete programs |
+| WiFi signal, Uptime | `sensor` | Diagnostic |
+
+The device becomes **unavailable** in HA when sqwrtr is offline (MQTT last will). Renaming a zone or program in the web UI updates the entity names.
+
+### MQTT topics
+
+Base topic `sqwrtr/<device_id>`, where `device_id` defaults to `sqwrtr-<chipid>` (shown in the UI; change it there when you run more than one controller).
+
+| Topic | Direction | Payload |
+|---|---|---|
+| `…/status` | out, retained | `online` / `offline` (last will) |
+| `…/state` | out, retained | JSON: mode, factors, rain delay, runs, queue, next run, RSSI, uptime, runtime counters per zone |
+| `…/zone/<n>/state` | out, retained | `open` / `opening` / `closed` |
+| `…/zone/<n>/remaining` | out, retained | seconds (every 10 s while open) |
+| `…/zone/<n>/duration` | out, retained | minutes |
+| `…/event` | out | JSON event, e.g. `{"event":"zone_closed","zone":2,"duration_s":600,"reason":"timer","source":"schedule"}` (see [Live events](#live-events-websocket)) |
+| `…/zone/<n>/set` | in | `OPEN` (zone duration), `CLOSE`, a number of seconds (`0` = until max runtime) or `{"duration_s":300}` |
+| `…/zone/<n>/duration/set` | in | minutes |
+| `…/mode/set` | in | `auto` / `manual` / `winter` / `test` |
+| `…/factor/set`, `…/factor_lawn/set`, `…/factor_border/set` | in | 0–200 |
+| `…/cmd` | in | JSON, see below |
+
+`cmd` actions:
+
+```json
+{"action": "stop"}
+{"action": "test"}
+{"action": "run_program", "program": 2}
+{"action": "skip", "hours": 24, "reason": "rain expected"}
+{"action": "skip", "next": true, "reason": "rain expected"}
+{"action": "skip", "hours": 0}
+{"action": "skip_next"}
+{"action": "clear_skip"}
+{"action": "mode", "mode": "winter"}
+{"action": "open", "zone": 3, "duration_s": 300}
+{"action": "close", "zone": 3}
+```
+
+Retained command messages are ignored, so a stale retained `OPEN` can never open a valve after a reconnect. Rejected commands (limit reached, winter mode, …) show up as a `command_rejected` event.
+
+Example automation, skipping watering when rain is forecast:
+
+```yaml
+automation:
+  - alias: "sqwrtr: skip on rain"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.rain_next_24h   # any forecast sensor you have
+        above: 3
+    action:
+      - service: mqtt.publish
+        data:
+          topic: sqwrtr/sqwrtr-ab07c7/cmd   # your device id
+          payload: '{"action":"skip","hours":24,"reason":"rain expected"}'
+```
+
+Phase 7 will ship this as a ready-made HA package: weather logic based on [Open-Meteo](https://open-meteo.com/) (free, no key) that skips watering after/before rain and adjusts the seasonal factor from evapotranspiration, plus notifications through the HA companion app.
+
+### Without MQTT
+
+You can also use the [REST API](#rest-api) from Home Assistant:
 
 ```yaml
 # configuration.yaml
@@ -373,19 +458,7 @@ rest_command:
       X-API-Key: !secret sqwrtr_api_key
     payload: '{"hours": 24, "reason": "rain expected"}'
     content_type: "application/json"
-
-sensor:
-  - platform: rest
-    name: sqwrtr mode
-    resource: "http://192.168.1.50/api/status"
-    headers:
-      X-API-Key: !secret sqwrtr_api_key
-    value_template: "{{ value_json.mode }}"
-    json_attributes: [factor, skip, runs, queue, next_run]
-    scan_interval: 60
 ```
-
-Planned for phase 6–7: valve, number, select, button, sensor and update entities via MQTT discovery; a weather package based on [Open-Meteo](https://open-meteo.com/) (free, no key) that skips watering after/before rain and adjusts the seasonal factor from evapotranspiration; and notifications through the HA companion app.
 
 ## Configuration
 
@@ -408,7 +481,7 @@ Everything you change in the UI or through the API is stored in LittleFS and sur
 
 | File | Content |
 |---|---|
-| `/config.json` | Zones, safety settings, programs, mode, factors, rain delay, time zone, salted hashes of password and API key |
+| `/config.json` | Zones, safety settings, programs, mode, factors, rain delay, time zone, MQTT settings, salted hashes of password and API key |
 | `/log.bin` | Ring buffer with the last 200 log entries |
 | `/stats.bin` | Runtime counters per zone |
 
@@ -429,11 +502,12 @@ sqwrtr/
 │   ├── history.*             # log ring buffer + runtime counters (LittleFS)
 │   ├── storage.*             # /config.json, password/API-key hashes, backup/restore
 │   ├── ntp.*                 # time via NTP, time zone helpers
-│   ├── net.*                 # Wi-Fi, fallback AP, mDNS, ArduinoOTA
+│   ├── net.*                 # Wi-Fi (with reconnect), fallback AP, mDNS, ArduinoOTA
+│   ├── mqtt.*                # MQTT client, Home Assistant discovery, commands
 │   ├── web.*                 # async HTTP server, WebSocket, /update upload
 │   ├── api.*                 # REST API routes
 │   ├── auth.*                # API key, sessions, Basic auth for /update
-│   ├── events.*              # event bus → serial log + WebSocket (+ MQTT in phase 6)
+│   ├── events.*              # event bus → serial log + WebSocket + MQTT
 │   ├── button.*, status_led.*, console.*
 │   └── web_pages.h           # /update recovery page (PROGMEM)
 ├── web/
@@ -472,6 +546,7 @@ status            zones and system
 open <n> [sec]    open zone n (without sec: indefinite, capped by max runtime)
 close <n>         close zone n
 stop              emergency stop
+wifi              Wi-Fi status and network scan
 ap                start the fallback AP
 reboot            restart
 ```
@@ -491,6 +566,9 @@ Add a GPIO to `ZONE_PINS` and its board label to `ZONE_PIN_LABELS` in `include/c
 | Programs don't start | Check the clock on **System** (NTP needs internet), the mode (must be `auto`), the rain delay, and that the program is enabled and has steps. |
 | No COM port for USB flashing | Use a data-capable USB cable and install the CH340 driver. |
 | Board doesn't boot with relays connected | Something is connected to D8 (GPIO 15). Move it. |
+| Router shows the board online, but it's unreachable | Usually a mesh node refusing the association after the board moved. The firmware retries every 20 s; check the reason with the `wifi` console command or in the serial log (`connect failed (reason …)`). |
+| MQTT stays "Not connected" | Use the broker's IP address (not `.local`), check user and password (the error is shown next to the status), and that port 1883 is reachable. |
+| HA entities don't appear | Check that the MQTT integration is set up in HA and that the discovery prefix is `homeassistant`. |
 
 ## Contributing
 

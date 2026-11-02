@@ -6,6 +6,7 @@
 #include "log.h"
 #include "ntp.h"
 #include "programs.h"
+#include "mqtt.h"
 
 namespace storage {
 
@@ -186,6 +187,7 @@ static void save() {
     JsonObject a = doc["auth"].to<JsonObject>();
     a["admin_hash"] = adminHash;
     a["api_key_hash"] = apiKeyHash;
+    mqtt::configToJson(doc["mqtt"].to<JsonObject>(), true);  // not in the backup: contains the password
 
     // Write to a temporary file first, then rename: never a half-written file on power loss.
     File f = LittleFS.open(CONFIG_TMP, "w");
@@ -222,6 +224,12 @@ static void load() {
     }
     strlcpy(adminHash, doc["auth"]["admin_hash"] | "", sizeof(adminHash));
     strlcpy(apiKeyHash, doc["auth"]["api_key_hash"] | "", sizeof(apiKeyHash));
+    if (doc["mqtt"].is<JsonObjectConst>()) {
+        mqtt::Config m = mqtt::config();
+        if (mqtt::configFromJson(doc["mqtt"], m, &err)) mqtt::config() = m;
+        else LOG("Storage: MQTT config invalid (%s), using defaults", err);
+        mqtt::applyConfig();
+    }
     LOG("Storage: config loaded");
 }
 

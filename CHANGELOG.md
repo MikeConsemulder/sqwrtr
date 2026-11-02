@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] – MQTT + Home Assistant
+
+### Added
+- MQTT client (espMqttClient) with reconnect backoff and last will (`sqwrtr/<id>/status`).
+- Home Assistant auto-discovery: valve, duration, remaining time and runtime counters per zone; mode select;
+  season/lawn/border factors; rain delay binary sensor; active program, queue, next run, RSSI and uptime sensors;
+  buttons for emergency stop, test cycle, skip next run, clear rain delay and each program.
+- Commands over MQTT (`zone/<n>/set`, `zone/<n>/duration/set`, `mode/set`, `factor*/set`, `cmd` JSON); retained commands are ignored.
+- All events are published to `sqwrtr/<id>/event`; full state as JSON on `sqwrtr/<id>/state`.
+- MQTT settings in the web UI and `/api/settings` (`mqtt` object); MQTT status in `/api/info`.
+
 ### Changed
 - Everything is now in English: web UI, log messages, API messages, code comments and documentation.
 - API wire values translated: mode `handmatig` → `manual`, zone type `gazon` → `lawn`, day names `ma…zo` → `mon…sun`,

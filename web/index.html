@@ -145,7 +145,7 @@ input[type=range]{width:100%;padding:0;accent-color:var(--acc)}
   </form>
   <form class="card" onsubmit="saveFactors(event)">
     <h2 style="margin-top:0">Run times</h2>
-    <p class="mute" style="margin:0"><small>Home Assistant will later adjust the season factor automatically (weather).</small></p>
+    <p class="mute" style="margin:0"><small>Home Assistant can adjust these via MQTT (weather logic in phase 7).</small></p>
     <label for="f-season">Season factor <b id="f-season-v"></b></label><input id="f-season" type="range" min="0" max="200" step="5">
     <label for="f-lawn">Lawn factor <b id="f-lawn-v"></b></label><input id="f-lawn" type="range" min="0" max="200" step="5">
     <label for="f-border">Border / hedge factor <b id="f-border-v"></b></label><input id="f-border" type="range" min="0" max="200" step="5">
@@ -170,7 +170,16 @@ input[type=range]{width:100%;padding:0;accent-color:var(--acc)}
     <p class="mute" id="tz-now" style="margin:0"></p>
     <label for="tz">Time zone <small>(POSIX)</small></label><input id="tz" class="w" maxlength="47">
     <div class="row" style="margin-top:12px"><button class="p">Save</button></div></form>
-  <div class="card"><h2 style="margin-top:0">MQTT</h2><p class="mute">MQTT and Home Assistant arrive in phase 6.</p></div>
+  <form class="card" onsubmit="saveMqtt(event)"><h2 style="margin-top:0">MQTT / Home Assistant</h2>
+    <p class="mute" style="margin:0"><span id="mq-dot" class="dot"></span> <small id="mq-state"></small></p>
+    <label class="row" style="font-weight:400"><input type="checkbox" id="mq-en"> Enabled</label>
+    <label for="mq-host">Broker <small>(IP address; <code>.local</code> names don't resolve)</small></label><input id="mq-host" class="w" maxlength="63" placeholder="192.168.1.10">
+    <label for="mq-port">Port</label><input id="mq-port" type="number" min="1" max="65535">
+    <label for="mq-user">User</label><input id="mq-user" class="w" maxlength="31" autocomplete="off">
+    <label for="mq-pw">Password</label><input id="mq-pw" class="w" type="password" maxlength="63" autocomplete="new-password">
+    <label for="mq-id">Device ID <small>(topic <code>sqwrtr/&lt;id&gt;/…</code>; empty = default)</small></label><input id="mq-id" class="w" maxlength="23" pattern="[A-Za-z0-9_\-]*">
+    <label for="mq-pre">Discovery prefix</label><input id="mq-pre" class="w" maxlength="23" required pattern="[A-Za-z0-9_\-]+">
+    <div class="row" style="margin-top:12px"><button class="p">Save</button></div></form>
 </section>
 
 <section id="p-system" class="page hide">
@@ -411,7 +420,19 @@ async function loadSettings(){try{const s=await api('/settings');$('#mc').value=
   slider('f-season',s.season_factor);slider('f-lawn',s.factor_lawn);slider('f-border',s.factor_border);$('#f-pause').value=s.zone_pause_s;
   $('#tz').value=s.timezone;$('#tz-now').textContent=status&&status.time_valid?'Now: '+status.time+' (via NTP)':'Clock not set yet – waiting for NTP (internet required).';
   $('#pw-warn').classList.toggle('hide',!s.password_default);mcWarn();
-  $('#key-state').innerHTML='For Home Assistant and scripts: header <code>X-API-Key</code>. '+(s.api_key_default?'Currently active: the key from <code>secrets.h</code>.':'A custom key is set.')}catch(_){}}
+  $('#key-state').innerHTML='For Home Assistant and scripts: header <code>X-API-Key</code>. '+(s.api_key_default?'Currently active: the key from <code>secrets.h</code>.':'A custom key is set.');
+  renderMqtt(s.mqtt)}catch(_){}}
+function renderMqtt(m){$('#mq-en').checked=m.enabled;$('#mq-host').value=m.host;$('#mq-port').value=m.port;$('#mq-user').value=m.user;
+  $('#mq-pw').value='';$('#mq-pw').placeholder=m.password_set?'unchanged':'';$('#mq-id').value=m.device_id;$('#mq-id').placeholder=m.effective_device_id;
+  $('#mq-pre').value=m.discovery_prefix;mqttState(m)}
+function mqttState(m){const t={connected:'Connected',connecting:'Connecting…',disconnected:'Not connected',disabled:'Disabled'}[m.state]||m.state;
+  $('#mq-dot').classList.toggle('on',m.state=='connected');
+  $('#mq-state').textContent=t+(m.state!='disabled'?' – topic sqwrtr/'+m.effective_device_id:'')+(m.error&&m.state!='connected'?' ('+m.error+')':'')}
+async function saveMqtt(e){e.preventDefault();const m={enabled:$('#mq-en').checked,host:$('#mq-host').value.trim(),port:+$('#mq-port').value,
+  user:$('#mq-user').value.trim(),device_id:$('#mq-id').value.trim(),discovery_prefix:$('#mq-pre').value.trim()};
+  if($('#mq-pw').value)m.password=$('#mq-pw').value;
+  try{const s=await api('/settings','PUT',{mqtt:m});renderMqtt(s.mqtt);toast('MQTT saved – reconnecting');
+    setTimeout(async()=>{try{mqttState((await api('/settings')).mqtt)}catch(_){}},4000)}catch(_){}}
 function mcWarn(){$('#mc-warn').classList.toggle('hide',!($('#mc').value>2))}
 $('#mc').addEventListener('input',mcWarn);
 async function saveSafety(e){e.preventDefault();
@@ -427,7 +448,7 @@ function copyKey(){navigator.clipboard.writeText($('#key-val').textContent).then
 async function loadInfo(){try{const i=await api('/info');const up=i.uptime_s;
   const rows=[['Firmware','v'+i.version],['IP address',i.ip],['Hostname',i.hostname+'.local'],['WiFi signal',i.rssi+' dBm'],
     ['Time',status&&status.time_valid?status.time:'not set yet (NTP)'],['Uptime',Math.floor(up/86400)+' d '+Math.floor(up%86400/3600)+' h '+Math.floor(up%3600/60)+' min'],
-    ['Free memory',(i.heap_free/1024).toFixed(1)+' KB (fragmentation '+i.heap_frag+' %)'],['Last restart',i.reset_reason],['Chip ID',i.chip_id]];
+    ['Free memory',(i.heap_free/1024).toFixed(1)+' KB (fragmentation '+i.heap_frag+' %)'],['Last restart',i.reset_reason],['Chip ID',i.chip_id],['MQTT',i.mqtt]];
   $('#info').innerHTML=rows.map(r=>`<tr><td class="k">${r[0]}</td><td>${esc(r[1])}</td></tr>`).join('')}catch(_){}}
 async function restore(inp){const f=inp.files[0];inp.value='';if(!f)return;let body;
   try{body=JSON.parse(await f.text())}catch(_){toast('Not a valid JSON file');return}

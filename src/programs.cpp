@@ -350,6 +350,7 @@ void setSkipNext(const char* reason, zones::Source src) {
 // ---------- programs: JSON ----------
 
 bool exists(uint8_t id) { return id >= 1 && id <= MAX_PROGRAMS && progs[id - 1].used; }
+const char* name(uint8_t id) { return exists(id) ? progs[id - 1].name : nullptr; }
 
 int8_t freeId() {
     for (uint8_t i = 0; i < MAX_PROGRAMS; i++) if (!progs[i].used) return i + 1;
